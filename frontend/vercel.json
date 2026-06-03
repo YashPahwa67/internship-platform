@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://imp-api-vfem.onrender.com/api/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://imp-api-vfem.onrender.com/health"
+    }
+  ]
+}
