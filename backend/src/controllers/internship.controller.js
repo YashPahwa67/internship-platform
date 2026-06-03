@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { Internship } from '../models/Internship.js';
 import { Company } from '../models/Company.js';
+import { Application } from '../models/Application.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ROLES } from '../constants/roles.js';
@@ -47,6 +48,7 @@ export const list = asyncHandler(async (req, res) => {
   const hasNext = items.length > lim;
   if (hasNext) items.pop();
 
+  res.set('Cache-Control', 'no-store');
   res.json({
     success: true,
     data: items.map(formatInternship),
@@ -79,13 +81,16 @@ export const create = asyncHandler(async (req, res) => {
     throw new ApiError(403, 'FORBIDDEN', 'Company must be approved before posting');
   }
 
-  const slug = slugify(req.body.title) + '-' + Date.now().toString(36).slice(-4);
+  const { submit, ...fields } = req.body;
+  const slug = slugify(fields.title) + '-' + Date.now().toString(36).slice(-4);
+  const publishNow = Boolean(submit);
   const internship = await Internship.create({
-    ...req.body,
+    ...fields,
     companyId: req.user.companyId,
     slug,
     createdBy: req.user._id,
-    status: req.body.submit ? 'pending_review' : 'draft',
+    status: publishNow ? 'published' : 'draft',
+    publishedAt: publishNow ? new Date() : undefined,
   });
 
   await invalidateInternshipListCache();
@@ -95,9 +100,14 @@ export const create = asyncHandler(async (req, res) => {
 export const update = asyncHandler(async (req, res) => {
   const internship = await Internship.findOne({ _id: req.params.id, companyId: req.user.companyId });
   if (!internship) throw new ApiError(404, 'NOT_FOUND', 'Internship not found');
-  Object.assign(internship, req.body);
-  if (req.body.submit) internship.status = 'pending_review';
+  const { submit, ...updates } = req.body;
+  Object.assign(internship, updates);
+  if (submit) {
+    internship.status = 'published';
+    internship.publishedAt = new Date();
+  }
   await internship.save();
+  await invalidateInternshipListCache();
   await invalidateInternshipCache(internship._id.toString());
   res.json({ success: true, data: formatInternship(internship) });
 });
@@ -105,6 +115,42 @@ export const update = asyncHandler(async (req, res) => {
 export const companyList = asyncHandler(async (req, res) => {
   const items = await Internship.find({ companyId: req.user.companyId }).sort({ createdAt: -1 }).lean();
   res.json({ success: true, data: items.map(formatInternship) });
+});
+
+export const companyGetOne = asyncHandler(async (req, res) => {
+  const internship = await Internship.findOne({
+    _id: req.params.id,
+    companyId: req.user.companyId,
+  })
+    .populate('companyId', 'name slug')
+    .lean();
+  if (!internship) throw new ApiError(404, 'NOT_FOUND', 'Internship not found');
+  res.json({ success: true, data: formatInternship(internship) });
+});
+
+export const remove = asyncHandler(async (req, res) => {
+  const internship = await Internship.findOne({
+    _id: req.params.id,
+    companyId: req.user.companyId,
+  });
+  if (!internship) throw new ApiError(404, 'NOT_FOUND', 'Internship not found');
+
+  const applicationCount = await Application.countDocuments({ internshipId: internship._id });
+  if (applicationCount > 0) {
+    internship.status = 'closed';
+    await internship.save();
+    await invalidateInternshipListCache();
+    await invalidateInternshipCache(internship._id.toString());
+    return res.json({
+      success: true,
+      data: { message: 'Listing closed (applications exist)', status: 'closed' },
+    });
+  }
+
+  await internship.deleteOne();
+  await invalidateInternshipListCache();
+  await invalidateInternshipCache(internship._id.toString());
+  res.json({ success: true, data: { message: 'Internship deleted' } });
 });
 
 export const approve = asyncHandler(async (req, res) => {

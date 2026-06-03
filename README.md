@@ -35,6 +35,11 @@ npm run seed           # demo data
 npm run dev            # http://localhost:5001
 ```
 
+If you see **`EADDRINUSE` port 5001**, another API process is still running:
+```bash
+cd backend && npm run kill-port && npm run dev
+```
+
 ### 4. Frontend
 ```bash
 cd frontend
@@ -47,6 +52,8 @@ npm run dev            # http://localhost:5173
 | Role | Email | Password |
 |------|-------|----------|
 | Admin | admin@imp.com | Admin123! |
+
+If admin login fails (user missing), run: `cd backend && npm run ensure-admin` (or `npm run seed` to reset all demo data).
 | Company HR | hr@acme.com | Company123! |
 | Student | student@university.edu | Student123! |
 
@@ -75,6 +82,10 @@ npm run dev            # http://localhost:5173
 - **Cloudinary** — profile pictures & resume files (MongoDB stores URLs + metadata only)
 
 See [docs/STORAGE.md](./docs/STORAGE.md) for details.
+
+## Deploy on VPS
+
+See **[docs/DEPLOY-VPS.md](./docs/DEPLOY-VPS.md)** for Ubuntu + Nginx + PM2 + Redis + HTTPS.
 
 ## API
 

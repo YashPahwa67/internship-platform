@@ -4,15 +4,14 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useGetApplicationsQuery } from '../../api/applicationApi';
 import { useGetTasksQuery } from '../../api/taskApi';
 import { useGetInternshipsQuery } from '../../api/internshipApi';
-import { useAppSelector } from '../../app/hooks';
-import { selectUser } from '../auth/authSlice';
+import { useDisplayUser } from '../../hooks/useDisplayUser';
 import PageHeader from '../../components/ui/PageHeader';
 import StatCard from '../../components/ui/StatCard';
 import PremiumCard from '../../components/ui/PremiumCard';
 import FadeIn from '../../components/ui/FadeIn';
 
 export default function StudentDashboard() {
-  const user = useAppSelector(selectUser);
+  const { displayName } = useDisplayUser();
   const { data: apps } = useGetApplicationsQuery({});
   const { data: tasks } = useGetTasksQuery({});
   const { data: internships } = useGetInternshipsQuery({ limit: 3 });
@@ -24,7 +23,7 @@ export default function StudentDashboard() {
   return (
     <Box>
       <PageHeader
-        title={`Welcome, ${user?.firstName}`}
+        title={`Welcome, ${displayName}`}
         subtitle="Track your applications, tasks, and discover new opportunities."
       />
       <Grid container spacing={2} sx={{ mb: 4 }}>

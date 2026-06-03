@@ -5,6 +5,11 @@ export const applicationApi = baseApi.injectEndpoints({
     getApplications: builder.query({
       query: (params) => ({ url: '/applications', params }),
       providesTags: ['Applications'],
+      keepUnusedDataFor: 0,
+    }),
+    getApplication: builder.query({
+      query: (id) => `/applications/${id}`,
+      providesTags: (_r, _e, id) => [{ type: 'Applications', id }],
     }),
     apply: builder.mutation({
       query: (body) => ({ url: '/applications', method: 'POST', body }),
@@ -23,6 +28,7 @@ export const applicationApi = baseApi.injectEndpoints({
 
 export const {
   useGetApplicationsQuery,
+  useGetApplicationQuery,
   useApplyMutation,
   useUpdateApplicationStatusMutation,
   useWithdrawApplicationMutation,

@@ -6,6 +6,7 @@ import {
   experienceSchema,
   certificationSchema,
 } from './schemas/cloudinaryAsset.schema.js';
+import { resolveEducation } from '../utils/formatStudentProfile.js';
 
 const studentSchema = new mongoose.Schema(
   {
@@ -60,6 +61,10 @@ studentSchema.virtual('email', {
 studentSchema.pre('save', function syncLegacyFields(next) {
   if (this.college && !this.university) this.university = this.college;
   if (this.university && !this.college) this.college = this.university;
+
+  const synced = resolveEducation(this);
+  if (synced.length) this.education = synced;
+
   next();
 });
 

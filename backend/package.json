@@ -4,8 +4,12 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/server.js",
+    "kill-port": "lsof -ti :5001 | xargs kill -9 2>/dev/null || true",
     "start": "node src/server.js",
     "seed": "node src/scripts/seed.js",
+    "ensure-admin": "node src/scripts/ensure-admin.js",
+    "publish-pending": "node src/scripts/publish-pending-internships.js",
+    "sync-education": "node src/scripts/sync-student-education.js",
     "worker:email": "node src/jobs/emailWorker.js"
   },
   "dependencies": {

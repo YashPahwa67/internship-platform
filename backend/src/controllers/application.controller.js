@@ -9,6 +9,7 @@ import { notifyUser } from '../services/notification.service.js';
 import { applyForInternship } from '../services/application.service.js';
 import { enqueueEmail } from '../jobs/emailQueue.js';
 import logger from '../utils/logger.js';
+import { formatStudentProfile, formatResumeAsset } from '../utils/formatStudentProfile.js';
 
 const VALID_TRANSITIONS = {
   applied: ['shortlisted', 'rejected', 'withdrawn'],
@@ -40,13 +41,58 @@ export const list = asyncHandler(async (req, res) => {
     if (req.query.status) filter.status = req.query.status;
   }
 
+  const includeFullProfile = req.user.role === ROLES.COMPANY_HR || req.user.role === ROLES.ADMIN;
+
   const apps = await Application.find(filter)
     .populate('internshipId', 'title type location')
-    .populate({ path: 'studentId', populate: { path: 'userId', select: 'firstName lastName email' } })
+    .populate({
+      path: 'studentId',
+      populate: { path: 'userId', select: 'firstName lastName email' },
+    })
     .sort({ createdAt: -1 })
     .lean();
 
-  res.json({ success: true, data: apps.map((a) => formatApp(a, a.internshipId)) });
+  if (includeFullProfile) {
+    res.set('Cache-Control', 'no-store');
+  }
+
+  res.json({
+    success: true,
+    data: apps.map((a) => formatApp(a, a.internshipId, { fullProfile: includeFullProfile })),
+  });
+});
+
+export const getById = asyncHandler(async (req, res) => {
+  const filter = { _id: req.params.id };
+
+  if (req.user.role === ROLES.STUDENT) {
+    const student = await Student.findOne({ userId: req.user._id }).lean();
+    filter.studentId = student?._id;
+  } else if (req.user.role === ROLES.COMPANY_HR) {
+    filter.companyId = req.user.companyId;
+  }
+
+  const app = await Application.findOne(filter)
+    .populate('internshipId', 'title type location description')
+    .populate({
+      path: 'studentId',
+      populate: { path: 'userId', select: 'firstName lastName email' },
+    })
+    .lean();
+
+  if (!app) throw new ApiError(404, 'NOT_FOUND', 'Application not found');
+
+  const fullProfile =
+    req.user.role === ROLES.COMPANY_HR || req.user.role === ROLES.ADMIN;
+
+  if (fullProfile) {
+    res.set('Cache-Control', 'no-store');
+  }
+
+  res.json({
+    success: true,
+    data: formatApp(app, app.internshipId, { fullProfile }),
+  });
 });
 
 export const updateStatus = asyncHandler(async (req, res) => {
@@ -101,24 +147,38 @@ export const withdraw = asyncHandler(async (req, res) => {
   res.json({ success: true, data: formatApp(application) });
 });
 
-function formatApp(a, internship) {
+function formatApp(a, internship, options = {}) {
+  const { fullProfile = false } = options;
   const student = a.studentId;
+
+  let studentPayload;
+  if (fullProfile && student && typeof student === 'object') {
+    studentPayload = formatStudentProfile(student);
+  } else if (student?.userId) {
+    studentPayload = {
+      name: `${student.userId.firstName || ''} ${student.userId.lastName || ''}`.trim(),
+      email: student.userId.email,
+      college: student.college || student.university,
+    };
+  }
+
   return {
     id: a._id,
     status: a.status,
     coverLetter: a.coverLetter,
     appliedAt: a.appliedAt,
+    resumeAtApplication: formatResumeAsset(a.resumeSnapshot),
     internship: internship
-      ? { id: internship._id, title: internship.title, type: internship.type, location: internship.location }
+      ? {
+          id: internship._id,
+          title: internship.title,
+          type: internship.type,
+          location: internship.location,
+          description: internship.description,
+        }
       : a.internshipId
         ? { id: a.internshipId._id, title: a.internshipId.title }
         : undefined,
-    student: student?.userId
-      ? {
-          name: `${student.userId.firstName || ''} ${student.userId.lastName || ''}`.trim(),
-          email: student.userId.email,
-          university: student.university,
-        }
-      : undefined,
+    student: studentPayload,
   };
 }

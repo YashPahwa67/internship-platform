@@ -62,7 +62,10 @@ export async function register({ email, password, role, firstName, lastName, com
 }
 
 export async function login({ email, password }) {
-  const user = await User.findOne({ email }).select('+passwordHash').populate('companyId', 'name approvalStatus');
+  const normalizedEmail = email?.toLowerCase().trim();
+  const user = await User.findOne({ email: normalizedEmail })
+    .select('+passwordHash')
+    .populate('companyId', 'name approvalStatus');
   if (!user) throw new ApiError(401, 'UNAUTHORIZED', 'Invalid email or password');
 
   if (user.lockUntil && user.lockUntil > new Date()) {
@@ -83,11 +86,11 @@ export async function login({ email, password }) {
     throw new ApiError(401, 'UNAUTHORIZED', 'Invalid email or password');
   }
 
-  user.failedLoginAttempts = 0;
-  user.lockUntil = undefined;
   const family = uuidv4();
-  user.refreshTokenFamily = family;
-  await user.save();
+  await User.findByIdAndUpdate(user._id, {
+    $set: { failedLoginAttempts: 0, refreshTokenFamily: family },
+    $unset: { lockUntil: 1 },
+  });
 
   const tokens = await issueTokens(user, family);
   const populated = await User.findById(user._id).populate('companyId', 'name approvalStatus');
@@ -125,20 +128,33 @@ export async function issueTokens(user, family) {
 export async function getMe(userId) {
   const user = await User.findById(userId).populate('companyId', 'name approvalStatus');
   if (!user) throw new ApiError(404, 'NOT_FOUND', 'User not found');
+
   let profile = null;
   if (user.role === ROLES.STUDENT) {
-    profile = await Student.findOne({ userId: user._id });
+    const { getOrCreateProfile } = await import('./student.service.js');
+    profile = await getOrCreateProfile(userId);
   }
-  return { user: sanitizeUser(user), profile };
+
+  const sanitized = sanitizeUser(user);
+  if (profile?.profilePicture?.url) {
+    sanitized.profilePictureUrl = profile.profilePicture.url;
+  }
+  if (profile?.fullName) {
+    sanitized.displayName = profile.fullName;
+  }
+
+  return { user: sanitized, profile };
 }
 
 function sanitizeUser(user) {
+  const displayName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
   return {
     id: user._id,
     email: user.email,
     role: user.role,
     firstName: user.firstName,
     lastName: user.lastName,
+    displayName: displayName || undefined,
     companyId: user.companyId?._id || user.companyId,
     company: user.companyId?.name ? { name: user.companyId.name, approvalStatus: user.companyId.approvalStatus } : undefined,
     status: user.status,

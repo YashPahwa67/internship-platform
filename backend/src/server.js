@@ -28,6 +28,18 @@ async function start() {
     logger.info(`API running on http://localhost:${config.port}`);
   });
 
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      logger.error(
+        `Port ${config.port} is already in use. Another API instance is probably still running.\n` +
+          `Fix: lsof -ti :${config.port} | xargs kill -9\n` +
+          `Then run: npm run dev`
+      );
+      process.exit(1);
+    }
+    throw err;
+  });
+
   registerProcessHandlers(server);
 }
 

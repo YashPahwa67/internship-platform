@@ -9,10 +9,16 @@ import { applyLimiter } from '../middleware/rateLimiter.js';
 const router = Router();
 
 router.get('/', authenticate, applicationController.list);
-router.post('/', authenticate, studentOnly, applyLimiter, validate(Joi.object({
-  internshipId: Joi.string().required(),
-  coverLetter: Joi.string().max(2000),
-})), applicationController.apply);
+router.get('/:id', authenticate, applicationController.getById);
+const applySchema = Joi.object({
+  internshipId: Joi.string().hex().length(24).required().messages({
+    'string.hex': 'Invalid internship id',
+    'string.length': 'Invalid internship id',
+  }),
+  coverLetter: Joi.string().max(2000).allow('', null).optional(),
+});
+
+router.post('/', authenticate, studentOnly, applyLimiter, validate(applySchema), applicationController.apply);
 router.patch('/:id/status', authenticate, companyOnly, validate(Joi.object({
   status: Joi.string().required(),
   note: Joi.string(),

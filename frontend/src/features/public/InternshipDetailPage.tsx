@@ -34,11 +34,22 @@ export default function InternshipDetailPage() {
       return;
     }
     try {
-      await apply({ internshipId: id, coverLetter }).unwrap();
+      const body: { internshipId: string; coverLetter?: string } = { internshipId: id! };
+      if (coverLetter.trim()) body.coverLetter = coverLetter.trim();
+      await apply(body).unwrap();
       setMessage({ type: 'success', text: 'Application submitted successfully.' });
     } catch (err: unknown) {
-      const e = err as { data?: { error?: { message?: string } } };
-      setMessage({ type: 'error', text: e?.data?.error?.message || 'Failed to apply' });
+      const e = err as {
+        data?: {
+          message?: string;
+          error?: { message?: string; details?: { field: string; message: string }[] };
+        };
+      };
+      const detail = e?.data?.error?.details?.[0]?.message;
+      setMessage({
+        type: 'error',
+        text: detail || e?.data?.message || e?.data?.error?.message || 'Failed to apply',
+      });
     }
   };
 

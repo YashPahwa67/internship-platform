@@ -33,8 +33,8 @@ export default function LoginPage() {
       dispatch(setCredentials({ user: res.data.user, accessToken: res.data.accessToken }));
       navigate(roleRedirect[res.data.user.role] || '/');
     } catch (err: unknown) {
-      const e = err as { data?: { error?: { message?: string } } };
-      setError(e?.data?.error?.message || 'Login failed');
+      const e = err as { data?: { message?: string; error?: { message?: string } } };
+      setError(e?.data?.message || e?.data?.error?.message || 'Login failed');
     }
   };
 
@@ -54,7 +54,10 @@ export default function LoginPage() {
       </Typography>
       <Box sx={{ mt: 2, p: 2, borderRadius: 2, bgcolor: t.bgMuted, border: `1px solid ${t.border}` }}>
         <Typography variant="caption" color="text.secondary" display="block">
-          Demo: student@university.edu / Student123!
+          HR: hr@acme.com / Company123!
+        </Typography>
+        <Typography variant="caption" color="text.secondary" display="block">
+          Student: student@university.edu / Student123!
         </Typography>
       </Box>
     </AuthCard>

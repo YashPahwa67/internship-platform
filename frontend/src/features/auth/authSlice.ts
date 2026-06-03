@@ -6,6 +6,8 @@ export interface AuthUser {
   role: string;
   firstName?: string;
   lastName?: string;
+  displayName?: string;
+  profilePictureUrl?: string;
   company?: { name: string; approvalStatus: string };
 }
 
@@ -25,6 +27,11 @@ const initialState: AuthState = {
   accessToken: loadToken(),
 };
 
+function persistUser(user: AuthUser | null) {
+  if (user) localStorage.setItem('user', JSON.stringify(user));
+  else localStorage.removeItem('user');
+}
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -36,18 +43,45 @@ const authSlice = createSlice({
       state.user = action.payload.user;
       state.accessToken = action.payload.accessToken;
       localStorage.setItem('accessToken', action.payload.accessToken);
-      localStorage.setItem('user', JSON.stringify(action.payload.user));
+      persistUser(state.user);
+    },
+    patchUser: (state, action: PayloadAction<Partial<AuthUser>>) => {
+      if (!state.user) return;
+      state.user = { ...state.user, ...action.payload };
+      persistUser(state.user);
+    },
+    syncFromStudentProfile: (
+      state,
+      action: PayloadAction<{
+        fullName?: string;
+        user?: { firstName?: string; lastName?: string };
+        profilePicture?: { url?: string } | null;
+      }>
+    ) => {
+      if (!state.user) return;
+      const { fullName, user: u, profilePicture } = action.payload;
+      if (fullName) {
+        state.user.displayName = fullName;
+        const parts = fullName.trim().split(/\s+/);
+        state.user.firstName = parts[0] || state.user.firstName;
+        state.user.lastName = parts.slice(1).join(' ') || '';
+      }
+      if (u?.firstName !== undefined) state.user.firstName = u.firstName;
+      if (u?.lastName !== undefined) state.user.lastName = u.lastName;
+      if (profilePicture?.url) state.user.profilePictureUrl = profilePicture.url;
+      else if (profilePicture === null) state.user.profilePictureUrl = undefined;
+      persistUser(state.user);
     },
     logout: (state) => {
       state.user = null;
       state.accessToken = null;
       localStorage.removeItem('accessToken');
-      localStorage.removeItem('user');
+      persistUser(null);
     },
   },
 });
 
-export const { setCredentials, logout } = authSlice.actions;
+export const { setCredentials, patchUser, syncFromStudentProfile, logout } = authSlice.actions;
 export default authSlice.reducer;
 
 export const selectIsAuthenticated = (state: { auth: AuthState }) =>

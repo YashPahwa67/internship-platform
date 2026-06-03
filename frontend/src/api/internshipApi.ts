@@ -4,23 +4,45 @@ export const internshipApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getInternships: builder.query({
       query: (params) => ({ url: '/internships', params }),
-      providesTags: ['Internships'],
+      providesTags: (result) =>
+        result?.data
+          ? [
+              ...result.data.map((job: { id: string }) => ({ type: 'Internships' as const, id: job.id })),
+              { type: 'Internships', id: 'LIST' },
+            ]
+          : [{ type: 'Internships', id: 'LIST' }],
     }),
     getInternship: builder.query({
       query: (id) => `/internships/${id}`,
       providesTags: (_r, _e, id) => [{ type: 'Internships', id }],
     }),
+    getCompanyInternship: builder.query({
+      query: (id) => `/internships/company/${id}`,
+      providesTags: (_r, _e, id) => [{ type: 'Internships', id }],
+    }),
     getCompanyInternships: builder.query({
       query: () => '/internships/company/mine',
-      providesTags: ['Internships'],
+      providesTags: [{ type: 'Internships', id: 'COMPANY_LIST' }],
     }),
     createInternship: builder.mutation({
       query: (body) => ({ url: '/internships', method: 'POST', body }),
-      invalidatesTags: ['Internships'],
+      invalidatesTags: [{ type: 'Internships', id: 'LIST' }, { type: 'Internships', id: 'COMPANY_LIST' }],
     }),
     updateInternship: builder.mutation({
       query: ({ id, ...body }) => ({ url: `/internships/${id}`, method: 'PUT', body }),
-      invalidatesTags: ['Internships'],
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Internships', id },
+        { type: 'Internships', id: 'LIST' },
+        { type: 'Internships', id: 'COMPANY_LIST' },
+      ],
+    }),
+    deleteInternship: builder.mutation({
+      query: (id) => ({ url: `/internships/${id}`, method: 'DELETE' }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: 'Internships', id },
+        { type: 'Internships', id: 'LIST' },
+        { type: 'Internships', id: 'COMPANY_LIST' },
+      ],
     }),
     getPendingInternships: builder.query({
       query: () => '/internships/admin/pending',
@@ -32,7 +54,7 @@ export const internshipApi = baseApi.injectEndpoints({
         method: 'POST',
         body: { approved, rejectionReason },
       }),
-      invalidatesTags: ['Internships'],
+      invalidatesTags: [{ type: 'Internships', id: 'LIST' }, 'Internships'],
     }),
   }),
 });
@@ -40,9 +62,11 @@ export const internshipApi = baseApi.injectEndpoints({
 export const {
   useGetInternshipsQuery,
   useGetInternshipQuery,
+  useGetCompanyInternshipQuery,
   useGetCompanyInternshipsQuery,
   useCreateInternshipMutation,
   useUpdateInternshipMutation,
+  useDeleteInternshipMutation,
   useGetPendingInternshipsQuery,
   useApproveInternshipMutation,
 } = internshipApi;

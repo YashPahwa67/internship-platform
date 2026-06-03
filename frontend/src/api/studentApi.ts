@@ -1,4 +1,5 @@
 import { baseApi } from './baseApi';
+import { syncProfileToAuth } from '../utils/syncProfileToAuth';
 
 export interface StudentProfile {
   id: string;
@@ -14,16 +15,21 @@ export interface StudentProfile {
   github?: string;
   portfolio?: string;
   location?: string;
+  user?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  };
   profilePicture?: {
     url: string;
     filename: string;
     uploadedAt?: string;
-  };
+  } | null;
   resume?: {
     url: string;
     filename: string;
     uploadedAt?: string;
-  };
+  } | null;
   education?: Array<Record<string, unknown>>;
   projects?: Array<Record<string, unknown>>;
   experience?: Array<Record<string, unknown>>;
@@ -35,35 +41,43 @@ export const studentApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getProfile: builder.query<{ success: boolean; data: StudentProfile }, void>({
       query: () => '/students/profile',
-      providesTags: ['User'],
+      providesTags: ['User', 'Applications'],
     }),
-    updateProfile: builder.mutation({
+    updateProfile: builder.mutation<{ success: boolean; data: StudentProfile }, Record<string, unknown>>({
       query: (body) => ({ url: '/students/profile', method: 'PUT', body }),
-      invalidatesTags: ['User'],
+      invalidatesTags: ['User', 'Applications'],
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          syncProfileToAuth(dispatch, data?.data);
+        } catch {
+          /* mutation failed */
+        }
+      },
     }),
-    uploadProfilePicture: builder.mutation({
+    uploadProfilePicture: builder.mutation<{ success: boolean; data: StudentProfile }, File>({
       query: (file: File) => {
         const formData = new FormData();
         formData.append('file', file);
         return { url: '/students/profile/picture', method: 'POST', body: formData };
       },
-      invalidatesTags: ['User'],
+      invalidatesTags: ['User', 'Applications'],
     }),
-    uploadResume: builder.mutation({
+    uploadResume: builder.mutation<{ success: boolean; data: StudentProfile }, File>({
       query: (file: File) => {
         const formData = new FormData();
         formData.append('file', file);
         return { url: '/students/profile/resume', method: 'POST', body: formData };
       },
-      invalidatesTags: ['User'],
+      invalidatesTags: ['User', 'Applications'],
     }),
-    deleteProfilePicture: builder.mutation({
+    deleteProfilePicture: builder.mutation<{ success: boolean; data: StudentProfile }, void>({
       query: () => ({ url: '/students/profile/picture', method: 'DELETE' }),
-      invalidatesTags: ['User'],
+      invalidatesTags: ['User', 'Applications'],
     }),
-    deleteResume: builder.mutation({
+    deleteResume: builder.mutation<{ success: boolean; data: StudentProfile }, void>({
       query: () => ({ url: '/students/profile/resume', method: 'DELETE' }),
-      invalidatesTags: ['User'],
+      invalidatesTags: ['User', 'Applications'],
     }),
   }),
 });

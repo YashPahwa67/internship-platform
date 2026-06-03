@@ -24,7 +24,15 @@ export default function RegisterPage() {
     e.preventDefault();
     setError('');
     try {
-      const res = await register({ ...form, role }).unwrap();
+      const payload = {
+        email: form.email,
+        password: form.password,
+        firstName: form.firstName,
+        lastName: form.lastName,
+        role,
+        ...(role === 'company_hr' ? { companyName: form.companyName } : {}),
+      };
+      const res = await register(payload).unwrap();
       dispatch(setCredentials({ user: res.data.user, accessToken: res.data.accessToken }));
       navigate(role === 'student' ? '/student/dashboard' : '/company/dashboard');
     } catch (err: unknown) {

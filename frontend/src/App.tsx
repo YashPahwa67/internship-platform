@@ -63,6 +63,7 @@ export default function App() {
           <Route path="/company" element={<DashboardLayout />}>
             <Route path="dashboard" element={<CompanyDashboard />} />
             <Route path="internships/new" element={<PostInternshipPage />} />
+            <Route path="internships/:id/edit" element={<PostInternshipPage />} />
             <Route path="internships" element={<CompanyInternshipsPage />} />
             <Route path="candidates" element={<CandidatesPage />} />
           </Route>

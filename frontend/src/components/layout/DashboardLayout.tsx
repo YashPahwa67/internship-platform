@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import {
   Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText,
@@ -17,9 +17,10 @@ import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import PostAddOutlinedIcon from '@mui/icons-material/PostAddOutlined';
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
-import { useAppSelector, useAppDispatch } from '../../app/hooks';
-import { selectUser, logout } from '../../features/auth/authSlice';
-import { useLogoutMutation } from '../../api/authApi';
+import { useAppDispatch } from '../../app/hooks';
+import { patchUser, syncFromStudentProfile, logout } from '../../features/auth/authSlice';
+import { useLogoutMutation, useMeQuery } from '../../api/authApi';
+import { useDisplayUser } from '../../hooks/useDisplayUser';
 import { useGetNotificationsQuery } from '../../api/notificationApi';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { useNavbarScroll } from '../../hooks/useNavbarScroll';
@@ -63,7 +64,7 @@ function getNavItems(role: string): NavItem[] {
 }
 
 export default function DashboardLayout() {
-  const user = useAppSelector(selectUser);
+  const { user, displayName, avatarUrl, initials } = useDisplayUser();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -75,7 +76,31 @@ export default function DashboardLayout() {
   const t = tokens[mode];
   const scrolled = useNavbarScroll(8);
   const [logoutApi] = useLogoutMutation();
+  const { data: meData } = useMeQuery(undefined, { skip: !user?.id });
   const { data: notifData } = useGetNotificationsQuery(undefined, { skip: !user?.id });
+
+  useEffect(() => {
+    const me = meData?.data;
+    if (!me?.user) return;
+    dispatch(
+      patchUser({
+        firstName: me.user.firstName,
+        lastName: me.user.lastName,
+        displayName: me.user.displayName,
+        profilePictureUrl: me.user.profilePictureUrl,
+        company: me.user.company,
+      })
+    );
+    if (me.profile && user?.role === 'student') {
+      dispatch(
+        syncFromStudentProfile({
+          fullName: me.profile.fullName,
+          user: me.profile.user,
+          profilePicture: me.profile.profilePicture ?? null,
+        })
+      );
+    }
+  }, [meData, dispatch, user?.role]);
   const unread = notifData?.meta?.unreadCount ?? 0;
 
   const navItems = getNavItems(user?.role || 'student');
@@ -159,8 +184,11 @@ export default function DashboardLayout() {
             </Badge>
           </IconButton>
           <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} sx={{ p: 0.5, ml: 0.5 }}>
-            <Avatar sx={{ width: 36, height: 36, bgcolor: 'primary.main', color: 'primary.contrastText', fontSize: 13, fontWeight: 600 }}>
-              {user?.firstName?.[0]}{user?.lastName?.[0]}
+            <Avatar
+              src={avatarUrl}
+              sx={{ width: 36, height: 36, bgcolor: 'primary.main', color: 'primary.contrastText', fontSize: 13, fontWeight: 600 }}
+            >
+              {initials}
             </Avatar>
           </IconButton>
           <Menu
@@ -172,7 +200,10 @@ export default function DashboardLayout() {
             PaperProps={{ sx: { mt: 1, minWidth: 200, borderRadius: 2, border: `1px solid ${t.border}` } }}
           >
             <MenuItem disabled sx={{ opacity: 1 }}>
-              <Typography variant="body2" color="text.secondary">{user?.email}</Typography>
+              <Typography variant="body2" fontWeight={600}>{displayName}</Typography>
+              <Typography variant="caption" color="text.secondary" display="block">
+                {user?.email}
+              </Typography>
             </MenuItem>
             <Divider />
             <MenuItem onClick={handleLogout}>

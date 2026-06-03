@@ -13,6 +13,8 @@ import {
   useDeleteProfilePictureMutation,
   useDeleteResumeMutation,
 } from '../../api/studentApi';
+import { useAppDispatch } from '../../app/hooks';
+import { syncProfileToAuth } from '../../utils/syncProfileToAuth';
 import PageHeader from '../../components/ui/PageHeader';
 import PremiumCard from '../../components/ui/PremiumCard';
 import FadeIn from '../../components/ui/FadeIn';
@@ -33,6 +35,7 @@ type FormState = {
 };
 
 export default function StudentProfilePage() {
+  const dispatch = useAppDispatch();
   const { data, refetch } = useGetProfileQuery(undefined);
   const [update, { isLoading, isSuccess, isError: saveError }] = useUpdateProfileMutation();
   const [uploadPicture, { isLoading: uploadingPicture }] = useUploadProfilePictureMutation();
@@ -66,8 +69,9 @@ export default function StudentProfilePage() {
         skills: profile.skills || [],
         skillInput: '',
       });
+      syncProfileToAuth(dispatch, profile);
     }
-  }, [profile]);
+  }, [profile, dispatch]);
 
   const addSkill = () => {
     if (form.skillInput.trim() && !form.skills.includes(form.skillInput.trim())) {
@@ -77,10 +81,16 @@ export default function StudentProfilePage() {
 
   const handleSave = async () => {
     const { skillInput, graduationYear, ...rest } = form;
-    await update({
-      ...rest,
-      graduationYear: graduationYear ? parseInt(graduationYear, 10) : undefined,
-    });
+    try {
+      const res = await update({
+        ...rest,
+        graduationYear: graduationYear ? parseInt(graduationYear, 10) : undefined,
+      }).unwrap();
+      syncProfileToAuth(dispatch, res.data);
+      setUploadMsg({ type: 'success', text: 'Profile saved.' });
+    } catch {
+      setUploadMsg({ type: 'error', text: 'Failed to save profile.' });
+    }
   };
 
   const handlePictureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -88,7 +98,8 @@ export default function StudentProfilePage() {
     if (!file) return;
     setUploadMsg(null);
     try {
-      await uploadPicture(file).unwrap();
+      const res = await uploadPicture(file).unwrap();
+      syncProfileToAuth(dispatch, res.data);
       setUploadMsg({ type: 'success', text: 'Profile picture updated.' });
       refetch();
     } catch {
@@ -102,13 +113,25 @@ export default function StudentProfilePage() {
     if (!file) return;
     setUploadMsg(null);
     try {
-      await uploadResume(file).unwrap();
+      const res = await uploadResume(file).unwrap();
+      syncProfileToAuth(dispatch, res.data);
       setUploadMsg({ type: 'success', text: 'Resume uploaded.' });
       refetch();
     } catch {
       setUploadMsg({ type: 'error', text: 'Failed to upload resume. Use PDF or DOC (max 5MB).' });
     }
     e.target.value = '';
+  };
+
+  const handleDeletePicture = async () => {
+    const res = await deletePicture().unwrap();
+    syncProfileToAuth(dispatch, res.data);
+    refetch();
+  };
+
+  const handleDeleteResume = async () => {
+    await deleteResume().unwrap();
+    refetch();
   };
 
   return (
@@ -141,7 +164,7 @@ export default function StudentProfilePage() {
                   {uploadingPicture ? 'Uploading...' : 'Change photo'}
                 </Button>
                 {profile?.profilePicture && (
-                  <IconButton size="small" onClick={() => deletePicture(undefined).then(() => refetch())} aria-label="Remove photo">
+                  <IconButton size="small" onClick={handleDeletePicture} aria-label="Remove photo">
                     <DeleteOutlineIcon fontSize="small" />
                   </IconButton>
                 )}
@@ -151,7 +174,7 @@ export default function StudentProfilePage() {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <Typography variant="body2" fontWeight={500}>{profile.resume.filename}</Typography>
                     <Button size="small" href={profile.resume.url} target="_blank" rel="noopener">View</Button>
-                    <IconButton size="small" onClick={() => deleteResume(undefined).then(() => refetch())}><DeleteOutlineIcon fontSize="small" /></IconButton>
+                    <IconButton size="small" onClick={handleDeleteResume}><DeleteOutlineIcon fontSize="small" /></IconButton>
                   </Box>
                 ) : (
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>No resume uploaded</Typography>
