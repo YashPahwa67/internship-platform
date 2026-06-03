@@ -1,9 +1,10 @@
 import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
-import { getRedis } from '../config/redis.js';
+import { getRedis, isRedisAvailable } from '../config/redis.js';
 
 function redisStore(prefix = 'rl') {
   try {
+    if (!isRedisAvailable()) return undefined;
     const redis = getRedis();
     return new RedisStore({
       sendCommand: (...args) => redis.call(...args),

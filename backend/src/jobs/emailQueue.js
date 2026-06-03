@@ -1,10 +1,14 @@
 import Bull from 'bull';
 import { config } from '../config/env.js';
+import { isRedisAvailable } from '../config/redis.js';
 import logger from '../utils/logger.js';
 
 let emailQueue = null;
 
 export function getEmailQueue() {
+  if (!isRedisAvailable()) {
+    throw new Error('Redis is not connected — cannot use email queue');
+  }
   if (!emailQueue) {
     emailQueue = new Bull('email', config.redisUrl, {
       defaultJobOptions: {

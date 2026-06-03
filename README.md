@@ -6,6 +6,7 @@ A full-stack MERN application connecting **Students**, **Companies**, **Mentors*
 
 ### Prerequisites
 - Node.js 20+
+- **Redis** (required for refresh tokens, caching, rate limits, email queue)
 - [MongoDB Atlas](https://www.mongodb.com/atlas) cluster (connection string in `.env`)
 - [Cloudinary](https://cloudinary.com) account (for profile pictures & resumes)
 
@@ -16,14 +17,25 @@ cp .env.example .env
 # Edit .env: MONGODB_URI (Atlas), JWT secrets, Cloudinary credentials
 ```
 
-### 2. Backend
+### 2. Redis
 ```bash
+# From project root — pick one:
+docker compose up -d redis
+# OR on macOS with Homebrew:
+brew install redis && brew services start redis
+```
+
+Default URL: `redis://127.0.0.1:6379` (set `REDIS_URL` in `backend/.env` if different).
+
+### 3. Backend
+```bash
+cd backend
 npm install
 npm run seed           # demo data
 npm run dev            # http://localhost:5001
 ```
 
-### 3. Frontend
+### 4. Frontend
 ```bash
 cd frontend
 npm install

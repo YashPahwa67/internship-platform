@@ -3,42 +3,65 @@ import { config } from './env.js';
 import logger from '../utils/logger.js';
 
 let redis = null;
+let redisAvailable = false;
+
+export function isRedisAvailable() {
+  return redisAvailable;
+}
 
 export function getRedis() {
-  if (!redis) {
-    redis = new Redis(config.redisUrl, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: true,
-      lazyConnect: true,
-    });
-
-    redis.on('error', (err) => logger.error('Redis error', { message: err.message }));
-    redis.on('connect', () => logger.info('Redis connected'));
+  if (!redisAvailable || !redis) {
+    throw new Error('Redis is not connected');
   }
   return redis;
 }
 
 export async function connectRedis() {
-  const client = getRedis();
-  if (client.status === 'ready') return client;
-  await client.connect();
-  return client;
+  if (redisAvailable && redis) return redis;
+
+  const client = new Redis(config.redisUrl, {
+    maxRetriesPerRequest: 3,
+    enableReadyCheck: true,
+    lazyConnect: true,
+    connectTimeout: 5000,
+    retryStrategy(times) {
+      if (times > 2) return null;
+      return Math.min(times * 300, 1000);
+    },
+  });
+
+  try {
+    await client.connect();
+    client.on('error', (err) => {
+      logger.error('Redis runtime error', { message: err.message });
+    });
+    redis = client;
+    redisAvailable = true;
+    logger.info('Redis connected', { url: config.redisUrl.replace(/:[^:@]+@/, ':***@') });
+    return redis;
+  } catch (err) {
+    client.disconnect();
+    throw err;
+  }
 }
 
 export async function disconnectRedis() {
   if (redis) {
-    await redis.quit();
+    try {
+      await redis.quit();
+    } catch {
+      /* already closed */
+    }
     redis = null;
+    redisAvailable = false;
+    logger.info('Redis disconnected');
   }
 }
 
 export async function pingRedis() {
+  if (!redisAvailable || !redis) return 'unhealthy';
   try {
-    const client = getRedis();
-    if (client.status === 'wait' || client.status === 'end') {
-      await client.connect();
-    }
-    const pong = await client.ping();
+    const pong = await redis.ping();
     return pong === 'PONG' ? 'healthy' : 'unhealthy';
   } catch {
     return 'unhealthy';

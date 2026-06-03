@@ -11,9 +11,13 @@ async function start() {
   try {
     await connectRedis();
   } catch (err) {
-    logger.warn('Redis connection failed — refresh tokens, cache, and rate limits need Redis', {
-      message: err.message,
-    });
+    logger.warn(
+      'Redis is not running (ECONNREFUSED on port 6379). Start Redis, then restart the API:\n' +
+        '  • Docker:  docker compose up -d redis\n' +
+        '  • macOS:   brew install redis && brew services start redis\n' +
+        'Without Redis: in-memory rate limits only; refresh tokens and cache are degraded in development.',
+      { message: err.message }
+    );
     if (config.nodeEnv === 'production') throw err;
   }
 
