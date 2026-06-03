@@ -28,7 +28,10 @@ const internshipSchema = new mongoose.Schema(
 );
 
 internshipSchema.index({ companyId: 1, slug: 1 }, { unique: true });
+internshipSchema.index({ status: 1, _id: -1 });
 internshipSchema.index({ status: 1, publishedAt: -1 });
+internshipSchema.index({ companyId: 1, status: 1 });
+internshipSchema.index({ skills: 1 });
 internshipSchema.index({ title: 'text', description: 'text' });
 
 export const Internship = mongoose.model('Internship', internshipSchema);

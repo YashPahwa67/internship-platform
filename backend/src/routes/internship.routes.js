@@ -2,11 +2,18 @@ import { Router } from 'express';
 import Joi from 'joi';
 import * as internshipController from '../controllers/internship.controller.js';
 import { authenticate } from '../middleware/authenticate.js';
-import { authorize, adminOnly, companyOnly } from '../middleware/authorize.js';
+import { adminOnly, companyOnly } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
-import { ROLES } from '../constants/roles.js';
+import { cache } from '../middleware/cache.js';
 
 const router = Router();
+
+const listCacheKey = (req) => {
+  const qs = new URLSearchParams(
+    Object.entries(req.query).filter(([, v]) => v != null && v !== '')
+  ).toString();
+  return `cache:GET:/api/v1/internships${qs ? `?${qs}` : ''}`;
+};
 const createSchema = Joi.object({
   title: Joi.string().required(),
   description: Joi.string().required(),
@@ -21,7 +28,7 @@ const createSchema = Joi.object({
   submit: Joi.boolean(),
 });
 
-router.get('/', internshipController.list);
+router.get('/', cache(300, listCacheKey), internshipController.list);
 router.get('/company/mine', authenticate, companyOnly, internshipController.companyList);
 router.get('/admin/pending', authenticate, adminOnly, internshipController.pendingReview);
 router.get('/:id', internshipController.getById);

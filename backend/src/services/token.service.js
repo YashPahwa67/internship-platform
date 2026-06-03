@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
-import { config } from '../config/index.js';
+import { config } from '../config/env.js';
 
 export function signAccessToken(user) {
   return jwt.sign(

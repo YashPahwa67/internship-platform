@@ -1,10 +1,14 @@
 import { Application } from '../models/Application.js';
-import { Internship } from '../models/Internship.js';
 import { Student } from '../models/Student.js';
+import { Internship } from '../models/Internship.js';
+import { User } from '../models/User.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ROLES } from '../constants/roles.js';
 import { notifyUser } from '../services/notification.service.js';
+import { applyForInternship } from '../services/application.service.js';
+import { enqueueEmail } from '../jobs/emailQueue.js';
+import logger from '../utils/logger.js';
 
 const VALID_TRANSITIONS = {
   applied: ['shortlisted', 'rejected', 'withdrawn'],
@@ -16,56 +20,19 @@ const VALID_TRANSITIONS = {
 };
 
 export const apply = asyncHandler(async (req, res) => {
-  const internship = await Internship.findById(req.body.internshipId);
-  if (!internship || internship.status !== 'published') {
-    throw new ApiError(400, 'INTERNSHIP_CLOSED', 'Internship not available');
-  }
-
-  const student = await Student.findOne({ userId: req.user._id });
-  if (!student) throw new ApiError(400, 'VALIDATION_ERROR', 'Student profile not found');
-
-  const existing = await Application.findOne({ studentId: student._id, internshipId: internship._id });
-  if (existing) throw new ApiError(409, 'ALREADY_APPLIED', 'Already applied');
-
-  const application = await Application.create({
-    studentId: student._id,
-    internshipId: internship._id,
-    companyId: internship.companyId,
+  const { application, internship } = await applyForInternship({
     userId: req.user._id,
+    firstName: req.user.firstName,
+    internshipId: req.body.internshipId,
     coverLetter: req.body.coverLetter,
-    resumeSnapshot: student.resume
-      ? {
-          url: student.resume.url,
-          filename: student.resume.filename,
-          uploadedAt: student.resume.uploadedAt,
-        }
-      : undefined,
-    status: 'applied',
-    statusHistory: [{ status: 'applied', by: req.user._id, note: 'Application submitted' }],
   });
-
-  await Internship.findByIdAndUpdate(internship._id, { $inc: { applicationCount: 1 } });
-
-  const hrUsers = await import('../models/User.js').then((m) =>
-    m.User.find({ companyId: internship.companyId, role: ROLES.COMPANY_HR })
-  );
-  for (const hr of hrUsers) {
-    await notifyUser(hr._id, 'application.new', 'New application', `${req.user.firstName} applied for ${internship.title}`, {
-      applicationId: application._id,
-    });
-  }
-
-  await notifyUser(req.user._id, 'application.submitted', 'Application submitted', `You applied for ${internship.title}`, {
-    applicationId: application._id,
-  });
-
   res.status(201).json({ success: true, data: formatApp(application, internship) });
 });
 
 export const list = asyncHandler(async (req, res) => {
   let filter = {};
   if (req.user.role === ROLES.STUDENT) {
-    const student = await Student.findOne({ userId: req.user._id });
+    const student = await Student.findOne({ userId: req.user._id }).lean();
     filter.studentId = student?._id;
   } else if (req.user.role === ROLES.COMPANY_HR) {
     filter.companyId = req.user.companyId;
@@ -99,6 +66,7 @@ export const updateStatus = asyncHandler(async (req, res) => {
   });
   await application.save();
 
+  const internship = await Internship.findById(application.internshipId).select('title').lean();
   await notifyUser(
     application.userId,
     'application.status_changed',
@@ -106,6 +74,16 @@ export const updateStatus = asyncHandler(async (req, res) => {
     `Your application status is now: ${req.body.status}`,
     { applicationId: application._id, status: req.body.status }
   );
+
+  const studentUser = await User.findById(application.userId).select('email firstName').lean();
+  if (studentUser?.email && internship) {
+    await enqueueEmail('application-status', {
+      to: studentUser.email,
+      name: studentUser.firstName,
+      internshipTitle: internship.title,
+      status: req.body.status,
+    }).catch((e) => logger.warn('Email queue failed', { message: e.message }));
+  }
 
   res.json({ success: true, data: formatApp(application) });
 });

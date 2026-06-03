@@ -17,6 +17,4 @@ router.use('/notifications', notificationRoutes);
 router.use('/admin', adminRoutes);
 router.use('/students', studentRoutes);
 
-router.get('/health', (req, res) => res.json({ success: true, data: { status: 'ok' } }));
-
 export default router;

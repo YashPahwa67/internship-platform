@@ -1,41 +1,69 @@
+import mongoose from 'mongoose';
 import { Internship } from '../models/Internship.js';
 import { Company } from '../models/Company.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ROLES } from '../constants/roles.js';
+import {
+  invalidateInternshipCache,
+  invalidateInternshipListCache,
+} from '../middleware/cache.js';
 
 function slugify(text) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
 
 export const list = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20, q, skills, type } = req.query;
+  const { cursor, limit = 20, q, skills, type, location, stipendMin } = req.query;
   const filter = { status: 'published' };
-  if (q) filter.$or = [{ title: new RegExp(q, 'i') }, { description: new RegExp(q, 'i') }];
-  if (skills) filter.skills = { $in: skills.split(',') };
-  if (type) filter.type = type;
 
-  const skip = (parseInt(page) - 1) * parseInt(limit);
-  const [items, total] = await Promise.all([
-    Internship.find(filter)
-      .populate('companyId', 'name slug')
-      .sort({ publishedAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .lean(),
-    Internship.countDocuments(filter),
-  ]);
+  if (location) filter.location = new RegExp(location, 'i');
+  if (type) filter.type = type;
+  if (stipendMin) filter['stipend.min'] = { $gte: parseInt(stipendMin, 10) };
+  if (skills) filter.skills = { $in: skills.split(',').map((s) => s.trim()) };
+  if (q) {
+    const term = q.trim();
+    if (term) {
+      filter.$or = [
+        { title: new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
+        { description: new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
+      ];
+    }
+  }
+  if (cursor) {
+    if (!mongoose.Types.ObjectId.isValid(cursor)) {
+      throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid cursor');
+    }
+    filter._id = { $lt: new mongoose.Types.ObjectId(cursor) };
+  }
+
+  const lim = Math.min(parseInt(limit, 10) || 20, 50);
+  const items = await Internship.find(filter)
+    .populate('companyId', 'name slug')
+    .sort({ _id: -1 })
+    .limit(lim + 1)
+    .lean();
+
+  const hasNext = items.length > lim;
+  if (hasNext) items.pop();
 
   res.json({
     success: true,
     data: items.map(formatInternship),
-    meta: { page: parseInt(page), limit: parseInt(limit), total },
+    meta: {
+      nextCursor: hasNext ? items.at(-1)?._id?.toString() : null,
+      hasNext,
+      limit: lim,
+    },
   });
 });
 
 export const getById = asyncHandler(async (req, res) => {
-  const internship = await Internship.findById(req.params.id).populate('companyId', 'name description website');
+  const internship = await Internship.findById(req.params.id)
+    .populate('companyId', 'name description website')
+    .lean();
   if (!internship) throw new ApiError(404, 'NOT_FOUND', 'Internship not found');
+
   const isOwner = req.user?.companyId?.toString() === internship.companyId?._id?.toString();
   const isAdmin = req.user?.role === ROLES.ADMIN;
   if (internship.status !== 'published' && !isOwner && !isAdmin) {
@@ -45,7 +73,7 @@ export const getById = asyncHandler(async (req, res) => {
 });
 
 export const create = asyncHandler(async (req, res) => {
-  const company = await Company.findById(req.user.companyId);
+  const company = await Company.findById(req.user.companyId).lean();
   if (!company) throw new ApiError(400, 'VALIDATION_ERROR', 'Company not found');
   if (company.approvalStatus !== 'approved') {
     throw new ApiError(403, 'FORBIDDEN', 'Company must be approved before posting');
@@ -60,6 +88,7 @@ export const create = asyncHandler(async (req, res) => {
     status: req.body.submit ? 'pending_review' : 'draft',
   });
 
+  await invalidateInternshipListCache();
   res.status(201).json({ success: true, data: formatInternship(internship) });
 });
 
@@ -69,6 +98,7 @@ export const update = asyncHandler(async (req, res) => {
   Object.assign(internship, req.body);
   if (req.body.submit) internship.status = 'pending_review';
   await internship.save();
+  await invalidateInternshipCache(internship._id.toString());
   res.json({ success: true, data: formatInternship(internship) });
 });
 
@@ -87,6 +117,7 @@ export const approve = asyncHandler(async (req, res) => {
     internship.status = 'rejected';
   }
   await internship.save();
+  await invalidateInternshipCache(internship._id.toString());
   res.json({ success: true, data: formatInternship(internship) });
 });
 

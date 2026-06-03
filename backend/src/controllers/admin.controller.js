@@ -11,7 +11,15 @@ export const listUsers = asyncHandler(async (req, res) => {
   if (req.query.role) filter.role = req.query.role;
   if (req.query.status) filter.status = req.query.status;
 
-  const users = await User.find(filter).select('-passwordHash').sort({ createdAt: -1 }).limit(100).lean();
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+  const skip = (page - 1) * limit;
+
+  const [users, total] = await Promise.all([
+    User.find(filter).select('-passwordHash').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    User.countDocuments(filter),
+  ]);
+
   res.json({
     success: true,
     data: users.map((u) => ({
@@ -23,6 +31,7 @@ export const listUsers = asyncHandler(async (req, res) => {
       lastName: u.lastName,
       createdAt: u.createdAt,
     })),
+    meta: { page, limit, total },
   });
 });
 
@@ -59,7 +68,28 @@ export const analytics = asyncHandler(async (req, res) => {
     Internship.countDocuments({ status: 'published' }),
   ]);
 
-  const appsByStatus = await Application.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]);
+  const [appsByStatus, topCompanies] = await Promise.all([
+    Application.aggregate([
+      { $group: { _id: '$status', count: { $sum: 1 } } },
+      { $project: { status: '$_id', count: 1, _id: 0 } },
+    ]),
+    Internship.aggregate([
+      { $match: { status: 'published' } },
+      { $group: { _id: '$companyId', total: { $sum: 1 }, totalOpenings: { $sum: '$openings' } } },
+      { $sort: { total: -1 } },
+      { $limit: 10 },
+      { $lookup: { from: 'companies', localField: '_id', foreignField: '_id', as: 'company' } },
+      { $unwind: '$company' },
+      {
+        $project: {
+          companyId: '$_id',
+          name: '$company.name',
+          total: 1,
+          totalOpenings: 1,
+        },
+      },
+    ]),
+  ]);
 
   res.json({
     success: true,
@@ -70,7 +100,8 @@ export const analytics = asyncHandler(async (req, res) => {
       internships,
       publishedInternships: published,
       applications,
-      applicationsByStatus: Object.fromEntries(appsByStatus.map((s) => [s._id, s.count])),
+      applicationsByStatus: Object.fromEntries(appsByStatus.map((s) => [s.status, s.count])),
+      topCompanies,
     },
   });
 });

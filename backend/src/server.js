@@ -1,18 +1,33 @@
-import { createApp } from './app.js';
+import { createApp, registerProcessHandlers } from './app.js';
 import { connectDatabase } from './config/database.js';
+import { connectRedis } from './config/redis.js';
 import { initCloudinary } from './config/cloudinary.js';
-import { config } from './config/index.js';
+import { config } from './config/env.js';
+import logger from './utils/logger.js';
 
 async function start() {
   await connectDatabase();
+
+  try {
+    await connectRedis();
+  } catch (err) {
+    logger.warn('Redis connection failed — refresh tokens, cache, and rate limits need Redis', {
+      message: err.message,
+    });
+    if (config.nodeEnv === 'production') throw err;
+  }
+
   initCloudinary();
+
   const app = createApp();
-  app.listen(config.port, () => {
-    console.log(`API running on http://localhost:${config.port}`);
+  const server = app.listen(config.port, () => {
+    logger.info(`API running on http://localhost:${config.port}`);
   });
+
+  registerProcessHandlers(server);
 }
 
 start().catch((err) => {
-  console.error('Failed to start server:', err);
+  logger.error('Failed to start server', { message: err.message, stack: err.stack });
   process.exit(1);
 });

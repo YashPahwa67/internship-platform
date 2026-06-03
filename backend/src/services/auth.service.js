@@ -4,7 +4,12 @@ import { Student } from '../models/Student.js';
 import { Company } from '../models/Company.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ROLES } from '../constants/roles.js';
-import { signAccessToken, signRefreshToken } from './token.service.js';
+import { signAccessToken, signRefreshToken, verifyRefreshToken } from './token.service.js';
+import {
+  storeRefreshToken,
+  revokeRefreshToken,
+  validateRefreshToken,
+} from './redisToken.service.js';
 
 function slugify(text) {
   return text
@@ -51,9 +56,7 @@ export async function register({ email, password, role, firstName, lastName, com
     });
   }
 
-  const tokens = issueTokens(user);
-  await User.findByIdAndUpdate(user._id, { refreshTokenFamily: tokens.family });
-
+  const tokens = await issueTokens(user);
   const populated = await User.findById(user._id).populate('companyId', 'name approvalStatus');
   return { user: sanitizeUser(populated), ...tokens };
 }
@@ -86,14 +89,36 @@ export async function login({ email, password }) {
   user.refreshTokenFamily = family;
   await user.save();
 
-  const tokens = issueTokens(user, family);
+  const tokens = await issueTokens(user, family);
   const populated = await User.findById(user._id).populate('companyId', 'name approvalStatus');
   return { user: sanitizeUser(populated), ...tokens };
 }
 
-export function issueTokens(user, family) {
+export async function refreshAccessToken(refreshToken) {
+  const payload = verifyRefreshToken(refreshToken);
+  const userId = payload.sub;
+  await validateRefreshToken(userId, refreshToken);
+
+  const user = await User.findById(userId).populate('companyId', 'name approvalStatus');
+  if (!user || user.status === 'suspended') {
+    throw new ApiError(401, 'UNAUTHORIZED', 'User not found or suspended');
+  }
+
+  const accessToken = signAccessToken(user);
+  const { token: newRefresh } = signRefreshToken(user, payload.family);
+  await storeRefreshToken(userId, newRefresh);
+
+  return { accessToken, refreshToken: newRefresh, user: sanitizeUser(user) };
+}
+
+export async function logoutUser(userId) {
+  await revokeRefreshToken(userId);
+}
+
+export async function issueTokens(user, family) {
   const accessToken = signAccessToken(user);
   const { token: refreshToken, family: tokenFamily } = signRefreshToken(user, family);
+  await storeRefreshToken(user._id.toString(), refreshToken);
   return { accessToken, refreshToken, family: tokenFamily };
 }
 

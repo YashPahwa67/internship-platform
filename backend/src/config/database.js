@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
-import { config } from './index.js';
+import { config } from './env.js';
+import logger from '../utils/logger.js';
 
 const ATLAS_OPTIONS = {
   maxPoolSize: 10,
@@ -10,33 +11,41 @@ const ATLAS_OPTIONS = {
   w: 'majority',
 };
 
-export async function connectDatabase() {
-  if (!config.mongoUri) {
-    throw new Error('MONGODB_URI is not set. Add your MongoDB Atlas connection string to .env');
-  }
+const MAX_RETRIES = 5;
+const RETRY_DELAY_MS = 3000;
 
+export async function connectDatabase() {
   mongoose.set('strictQuery', true);
 
-  mongoose.connection.on('connected', () => {
-    console.log('MongoDB Atlas connected');
-  });
-
   mongoose.connection.on('error', (err) => {
-    console.error('MongoDB connection error:', err.message);
+    logger.error('MongoDB connection error', { message: err.message });
   });
 
   mongoose.connection.on('disconnected', () => {
-    console.warn('MongoDB disconnected');
+    logger.warn('MongoDB disconnected');
   });
 
-  const isAtlas = config.mongoUri.includes('mongodb.net');
-  await mongoose.connect(config.mongoUri, isAtlas ? ATLAS_OPTIONS : {});
-
-  if (isAtlas) {
-    console.log('Using MongoDB Atlas cluster');
+  let attempt = 0;
+  while (attempt < MAX_RETRIES) {
+    try {
+      const isAtlas = config.mongoUri.includes('mongodb.net');
+      await mongoose.connect(config.mongoUri, isAtlas ? ATLAS_OPTIONS : {});
+      logger.info(isAtlas ? 'MongoDB Atlas connected' : 'MongoDB connected');
+      return;
+    } catch (err) {
+      attempt += 1;
+      logger.warn(`MongoDB connect attempt ${attempt}/${MAX_RETRIES} failed`, { message: err.message });
+      if (attempt >= MAX_RETRIES) throw err;
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    }
   }
 }
 
 export async function disconnectDatabase() {
-  await mongoose.disconnect();
+  await mongoose.connection.close();
+  logger.info('MongoDB connection closed');
+}
+
+export function getDbHealth() {
+  return mongoose.connection.readyState === 1 ? 'healthy' : 'unhealthy';
 }

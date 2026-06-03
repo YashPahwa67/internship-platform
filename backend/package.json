@@ -5,22 +5,32 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "seed": "node src/scripts/seed.js"
+    "seed": "node src/scripts/seed.js",
+    "worker:email": "node src/jobs/emailWorker.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "bull": "^4.16.5",
+    "cloudinary": "^2.5.1",
+    "compression": "^1.7.5",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
+    "hpp": "^0.2.3",
+    "ioredis": "^5.4.2",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
-    "cloudinary": "^2.5.1",
     "mongoose": "^8.9.3",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "uuid": "^11.0.5"
+    "rate-limit-redis": "^4.2.0",
+    "uuid": "^11.0.5",
+    "winston": "^3.17.0",
+    "xss-clean": "^0.1.4",
+    "zod": "^3.24.1"
   }
 }

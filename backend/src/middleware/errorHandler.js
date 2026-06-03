@@ -1,5 +1,6 @@
 import { ApiError } from '../utils/ApiError.js';
-import { config } from '../config/index.js';
+import { config } from '../config/env.js';
+import logger from '../utils/logger.js';
 
 export function errorHandler(err, req, res, next) {
   if (res.headersSent) return next(err);
@@ -7,23 +8,34 @@ export function errorHandler(err, req, res, next) {
   if (err instanceof ApiError) {
     return res.status(err.statusCode).json({
       success: false,
-      error: { code: err.code, message: err.message, details: err.details },
+      message: err.message,
+      error: { code: err.code, details: err.details },
+      timestamp: new Date().toISOString(),
+      ...(config.nodeEnv === 'development' && { correlationId: req.correlationId }),
     });
   }
 
   if (err.code === 11000) {
     return res.status(409).json({
       success: false,
-      error: { code: 'CONFLICT', message: 'Duplicate entry' },
+      message: 'Duplicate entry',
+      error: { code: 'CONFLICT' },
+      timestamp: new Date().toISOString(),
     });
   }
 
-  console.error(err);
+  logger.error('Unhandled error', {
+    message: err.message,
+    stack: err.stack,
+    correlationId: req.correlationId,
+    path: req.originalUrl,
+  });
+
   res.status(500).json({
     success: false,
-    error: {
-      code: 'INTERNAL_ERROR',
-      message: config.nodeEnv === 'production' ? 'Internal server error' : err.message,
-    },
+    message: config.nodeEnv === 'production' ? 'Internal server error' : err.message,
+    error: { code: 'INTERNAL_ERROR' },
+    timestamp: new Date().toISOString(),
+    ...(config.nodeEnv === 'development' && { stack: err.stack }),
   });
 }
