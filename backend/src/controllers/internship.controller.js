@@ -25,9 +25,17 @@ export const list = asyncHandler(async (req, res) => {
   if (q) {
     const term = q.trim();
     if (term) {
+      const safe = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rx = new RegExp(safe, 'i');
+      // Resolve company name matches so we can filter by companyId
+      const matchingCompanies = await Company.find({ name: rx }).select('_id').lean();
+      const matchingCompanyIds = matchingCompanies.map((c) => c._id);
       filter.$or = [
-        { title: new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
-        { description: new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
+        { title: rx },
+        { description: rx },
+        { skills: rx },
+        { location: rx },
+        ...(matchingCompanyIds.length ? [{ companyId: { $in: matchingCompanyIds } }] : []),
       ];
     }
   }

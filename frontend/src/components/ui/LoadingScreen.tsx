@@ -1,6 +1,7 @@
 import { Box, Typography } from '@mui/material';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { tokens } from '../../theme/designTokens';
+import LogoMark from './LogoMark';
 
 export default function LoadingScreen() {
   const { mode } = useThemeMode();
@@ -15,24 +16,44 @@ export default function LoadingScreen() {
         alignItems: 'center',
         justifyContent: 'center',
         bgcolor: 'background.default',
-        gap: 2,
+        gap: 3,
       }}
     >
+      {/* Animated logo badge */}
       <Box
         sx={{
-          width: 40,
-          height: 40,
+          width: 52, height: 52,
+          borderRadius: '14px',
+          background: t.accentGradient,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: `0 4px 20px rgba(61, 99, 248, 0.35)`,
+          animation: 'pulse-soft 1.8s ease-in-out infinite',
+        }}
+      >
+        <LogoMark size={34} />
+      </Box>
+
+      {/* Spinner ring */}
+      <Box
+        sx={{
+          width: 24, height: 24,
           borderRadius: '50%',
           border: `2px solid ${t.border}`,
-          borderTopColor: t.text,
-          animation: 'spin 0.8s linear infinite',
-          '@keyframes spin': {
-            to: { transform: 'rotate(360deg)' },
-          },
+          borderTopColor: t.accent,
+          animation: 'spin 0.75s linear infinite',
+          '@keyframes spin': { to: { transform: 'rotate(360deg)' } },
         }}
       />
-      <Typography variant="body2" color="text.secondary" sx={{ animation: 'pulse-soft 1.5s ease infinite' }}>
-        Loading...
+
+      <Typography
+        variant="caption"
+        color="text.disabled"
+        letterSpacing="0.06em"
+        sx={{ fontSize: '0.75rem', textTransform: 'uppercase' }}
+      >
+        Loading
       </Typography>
     </Box>
   );

@@ -3,8 +3,9 @@ import { Outlet, useNavigate, useLocation, Link as RouterLink } from 'react-rout
 import {
   Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText,
   AppBar, Toolbar, Typography, IconButton, Badge, Avatar, Menu, MenuItem, Divider,
-  useMediaQuery, useTheme, Container,
+  useMediaQuery, useTheme, Container, Tooltip,
 } from '@mui/material';
+import Logo from '../ui/Logo';
 import MenuIcon from '@mui/icons-material/Menu';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import WorkOutlineIcon from '@mui/icons-material/WorkOutline';
@@ -17,6 +18,7 @@ import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import PostAddOutlinedIcon from '@mui/icons-material/PostAddOutlined';
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
+import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
 import { useAppDispatch } from '../../app/hooks';
 import { patchUser, syncFromStudentProfile, logout } from '../../features/auth/authSlice';
 import { useLogoutMutation, useMeQuery } from '../../api/authApi';
@@ -27,7 +29,7 @@ import { useNavbarScroll } from '../../hooks/useNavbarScroll';
 import { tokens } from '../../theme/designTokens';
 import { baseApi } from '../../api/baseApi';
 
-const DRAWER_WIDTH = 268;
+const DRAWER_WIDTH = 260;
 
 type NavItem = { label: string; path: string; icon: React.ReactNode };
 
@@ -112,108 +114,232 @@ export default function DashboardLayout() {
     navigate('/login');
   };
 
+  const roleLabel: Record<string, string> = {
+    admin: 'Administrator',
+    company_hr: 'Company',
+    mentor: 'Mentor',
+    student: 'Student',
+  };
+
   const drawer = (
-    <Box sx={{ py: 2, px: 1 }}>
-      <Typography
-        component={RouterLink}
-        to="/"
-        sx={{
-          display: 'block',
-          px: 2,
-          mb: 3,
-          fontWeight: 700,
-          fontSize: '1.125rem',
-          letterSpacing: '-0.03em',
-          color: 'text.primary',
-          textDecoration: 'none',
-        }}
-      >
-        IMP
-      </Typography>
-      <List disablePadding>
-        {navItems.map((item) => (
-          <ListItemButton
-            key={item.path}
-            component={RouterLink}
-            to={item.path}
-            selected={location.pathname === item.path}
-            onClick={() => setMobileOpen(false)}
-            sx={{
-              py: 1.25,
-              '& .MuiListItemIcon-root': { minWidth: 40, color: 'text.secondary' },
-              '&.Mui-selected .MuiListItemIcon-root': { color: 'text.primary' },
-            }}
-          >
-            <ListItemIcon>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.label} primaryTypographyProps={{ fontWeight: 500, fontSize: '0.9375rem' }} />
-          </ListItemButton>
-        ))}
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Brand */}
+      <Box sx={{ px: 2, pt: 2.5, pb: 2 }}>
+        <Logo size={32} />
+      </Box>
+
+      <Divider sx={{ borderColor: t.borderSubtle, mx: 2 }} />
+
+      {/* Role label */}
+      <Box sx={{ px: 2.5, pt: 1.5, pb: 0.5 }}>
+        <Typography variant="overline" sx={{ color: 'text.disabled', fontSize: '0.6875rem', letterSpacing: '0.1em' }}>
+          {roleLabel[user?.role || 'student']} Portal
+        </Typography>
+      </Box>
+
+      {/* Nav */}
+      <List disablePadding sx={{ px: 1.5, flexGrow: 1 }}>
+        {navItems.map((item) => {
+          const active = location.pathname === item.path;
+          return (
+            <ListItemButton
+              key={item.path}
+              component={RouterLink}
+              to={item.path}
+              selected={active}
+              onClick={() => setMobileOpen(false)}
+              sx={{
+                py: 1.1,
+                borderRadius: '10px',
+                mb: 0.25,
+                position: 'relative',
+                overflow: 'hidden',
+                '& .MuiListItemIcon-root': {
+                  minWidth: 36,
+                  color: active ? t.accent : 'text.disabled',
+                  transition: 'color 0.2s',
+                },
+              }}
+            >
+              {active && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    left: 0, top: '18%', bottom: '18%',
+                    width: 3, borderRadius: '0 3px 3px 0',
+                    background: t.accentGradient,
+                  }}
+                />
+              )}
+              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemText
+                primary={item.label}
+                primaryTypographyProps={{
+                  fontWeight: active ? 600 : 500,
+                  fontSize: '0.9rem',
+                  color: active ? 'text.primary' : 'text.secondary',
+                }}
+              />
+            </ListItemButton>
+          );
+        })}
       </List>
+
+      {/* User section at bottom */}
+      <Box sx={{ p: 2, mt: 'auto' }}>
+        <Divider sx={{ borderColor: t.borderSubtle, mb: 1.5 }} />
+        <Box
+          sx={{
+            display: 'flex', alignItems: 'center', gap: 1.5,
+            p: 1.25, borderRadius: '10px',
+            border: `1px solid ${t.border}`,
+            bgcolor: mode === 'light' ? t.bgSubtle : t.bgElevated,
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            '&:hover': { borderColor: t.accent, bgcolor: t.accentMuted },
+          }}
+          onClick={(e) => setAnchorEl(e.currentTarget as HTMLElement)}
+        >
+          <Avatar
+            src={avatarUrl}
+            sx={{ width: 32, height: 32, fontSize: 12, fontWeight: 700 }}
+          >
+            {initials}
+          </Avatar>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', lineHeight: 1.3 }} noWrap>
+              {displayName}
+            </Typography>
+            <Typography variant="caption" color="text.disabled" noWrap sx={{ display: 'block', fontSize: '0.72rem' }}>
+              {user?.email}
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
     </Box>
   );
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
+      {/* Top AppBar */}
       <AppBar
         position="fixed"
         elevation={0}
         sx={{
           width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
           ml: { md: `${DRAWER_WIDTH}px` },
-          bgcolor: scrolled ? (mode === 'light' ? 'rgba(255,255,255,0.9)' : 'rgba(10,10,10,0.9)') : 'background.default',
-          backdropFilter: scrolled ? 'blur(16px)' : 'none',
-          borderBottom: `1px solid ${scrolled ? t.border : 'transparent'}`,
-          transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+          bgcolor: scrolled
+            ? (mode === 'light' ? 'rgba(255,255,255,0.92)' : 'rgba(10,10,11,0.92)')
+            : 'background.default',
+          backdropFilter: scrolled ? 'blur(20px) saturate(200%)' : 'none',
+          borderBottom: `1px solid ${scrolled ? t.border : t.borderSubtle}`,
+          transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
-        <Toolbar sx={{ minHeight: { xs: 64, md: 72 } }}>
+        <Toolbar sx={{ minHeight: { xs: 60, md: 64 }, gap: 1 }}>
           {isMobile && (
-            <IconButton edge="start" onClick={() => setMobileOpen(true)} sx={{ mr: 1 }} aria-label="Open menu">
-              <MenuIcon />
+            <IconButton edge="start" onClick={() => setMobileOpen(true)} size="small" aria-label="Open menu">
+              <MenuIcon fontSize="small" />
             </IconButton>
           )}
-          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600, letterSpacing: '-0.02em' }}>
+          <Typography
+            variant="h6"
+            sx={{ flexGrow: 1, fontWeight: 700, letterSpacing: '-0.02em', fontSize: '1rem' }}
+          >
             {navItems.find((n) => n.path === location.pathname)?.label || 'Dashboard'}
           </Typography>
-          <IconButton onClick={toggle} aria-label="Toggle theme" size="small">
-            {mode === 'light' ? <DarkModeOutlinedIcon fontSize="small" /> : <LightModeOutlinedIcon fontSize="small" />}
-          </IconButton>
-          <IconButton onClick={() => navigate('/notifications')} aria-label="Notifications" size="small" sx={{ mx: 0.5 }}>
-            <Badge badgeContent={unread} color="error" sx={{ '& .MuiBadge-badge': { fontSize: 10, minWidth: 16, height: 16 } }}>
-              <NotificationsOutlinedIcon fontSize="small" />
-            </Badge>
-          </IconButton>
-          <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} sx={{ p: 0.5, ml: 0.5 }}>
+
+          {/* Theme toggle */}
+          <Tooltip title={`Switch to ${mode === 'light' ? 'dark' : 'light'} mode`}>
+            <IconButton
+              onClick={toggle}
+              size="small"
+              sx={{
+                width: 34, height: 34,
+                border: `1px solid ${t.border}`,
+                borderRadius: '9px',
+                color: 'text.secondary',
+                '&:hover': { borderColor: t.textMuted },
+              }}
+            >
+              {mode === 'light'
+                ? <DarkModeOutlinedIcon sx={{ fontSize: 16 }} />
+                : <LightModeOutlinedIcon sx={{ fontSize: 16 }} />}
+            </IconButton>
+          </Tooltip>
+
+          {/* Notifications */}
+          <Tooltip title="Notifications">
+            <IconButton
+              onClick={() => navigate('/notifications')}
+              size="small"
+              sx={{
+                width: 34, height: 34,
+                border: `1px solid ${t.border}`,
+                borderRadius: '9px',
+                color: 'text.secondary',
+                '&:hover': { borderColor: t.textMuted },
+              }}
+            >
+              <Badge
+                badgeContent={unread}
+                color="error"
+                sx={{ '& .MuiBadge-badge': { fontSize: '0.6rem', minWidth: 15, height: 15, p: '0 3px' } }}
+              >
+                <NotificationsOutlinedIcon sx={{ fontSize: 16 }} />
+              </Badge>
+            </IconButton>
+          </Tooltip>
+
+          {/* Avatar */}
+          <IconButton
+            onClick={(e) => setAnchorEl(e.currentTarget)}
+            sx={{ p: 0.25 }}
+          >
             <Avatar
               src={avatarUrl}
-              sx={{ width: 36, height: 36, bgcolor: 'primary.main', color: 'primary.contrastText', fontSize: 13, fontWeight: 600 }}
+              sx={{ width: 34, height: 34, fontSize: 12, fontWeight: 700 }}
             >
               {initials}
             </Avatar>
           </IconButton>
+
+          {/* User menu */}
           <Menu
             anchorEl={anchorEl}
             open={!!anchorEl}
             onClose={() => setAnchorEl(null)}
             transformOrigin={{ horizontal: 'right', vertical: 'top' }}
             anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-            PaperProps={{ sx: { mt: 1, minWidth: 200, borderRadius: 2, border: `1px solid ${t.border}` } }}
+            PaperProps={{
+              sx: {
+                mt: 0.5, minWidth: 220, borderRadius: '12px',
+                border: `1px solid ${t.border}`,
+                boxShadow: t.shadowLg,
+              },
+            }}
           >
-            <MenuItem disabled sx={{ opacity: 1 }}>
-              <Typography variant="body2" fontWeight={600}>{displayName}</Typography>
-              <Typography variant="caption" color="text.secondary" display="block">
-                {user?.email}
-              </Typography>
+            <Box sx={{ px: 2, py: 1.5 }}>
+              <Typography variant="body2" fontWeight={700}>{displayName}</Typography>
+              <Typography variant="caption" color="text.secondary" display="block">{user?.email}</Typography>
+            </Box>
+            <Divider sx={{ borderColor: t.border }} />
+            <MenuItem
+              onClick={() => { setAnchorEl(null); navigate(navItems.find((n) => n.label === 'Profile')?.path || '#'); }}
+              sx={{ gap: 1.5, py: 1 }}
+            >
+              <AccountCircleOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              <Typography variant="body2">Profile</Typography>
             </MenuItem>
-            <Divider />
-            <MenuItem onClick={handleLogout}>
-              <ListItemIcon><LogoutOutlinedIcon fontSize="small" /></ListItemIcon>
-              Logout
+            <MenuItem onClick={handleLogout} sx={{ gap: 1.5, py: 1, color: 'error.main' }}>
+              <LogoutOutlinedIcon fontSize="small" />
+              <Typography variant="body2">Log out</Typography>
             </MenuItem>
           </Menu>
         </Toolbar>
       </AppBar>
 
+      {/* Sidebar */}
       <Box component="nav" sx={{ width: { md: DRAWER_WIDTH }, flexShrink: { md: 0 } }}>
         <Drawer
           variant={isMobile ? 'temporary' : 'permanent'}
@@ -223,25 +349,27 @@ export default function DashboardLayout() {
             '& .MuiDrawer-paper': {
               width: DRAWER_WIDTH,
               boxSizing: 'border-box',
-              bgcolor: t.bgMuted,
-              borderRight: `1px solid ${t.border}`,
+              bgcolor: mode === 'light' ? t.bgMuted : t.sidebarBg,
+              borderRight: `1px solid ${t.sidebarBorder}`,
             },
           }}
         >
-          {!isMobile && <Toolbar />}
+          {!isMobile && <Toolbar sx={{ minHeight: '0 !important', p: '0 !important' }} />}
           {drawer}
         </Drawer>
       </Box>
 
+      {/* Main content */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
           width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
           minHeight: '100vh',
+          bgcolor: 'background.default',
         }}
       >
-        <Toolbar />
+        <Toolbar sx={{ minHeight: { xs: 60, md: 64 } }} />
         <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 }, px: { xs: 2, sm: 3 } }}>
           <Outlet />
         </Container>

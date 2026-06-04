@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Box, Typography, TypographyProps } from '@mui/material';
+import { Box, Typography, TypographyProps, Divider } from '@mui/material';
 import FadeIn from './FadeIn';
 
 type PageHeaderProps = {
@@ -7,6 +7,7 @@ type PageHeaderProps = {
   subtitle?: string;
   action?: ReactNode;
   titleVariant?: TypographyProps['variant'];
+  divider?: boolean;
 };
 
 export default function PageHeader({
@@ -14,6 +15,7 @@ export default function PageHeader({
   subtitle,
   action,
   titleVariant = 'h4',
+  divider = false,
 }: PageHeaderProps) {
   return (
     <FadeIn>
@@ -24,26 +26,28 @@ export default function PageHeader({
           alignItems: 'flex-start',
           flexWrap: 'wrap',
           gap: 2,
-          mb: 4,
+          mb: divider ? 3 : 4,
         }}
       >
         <Box>
           <Typography
             variant={titleVariant}
-            fontWeight={700}
-            letterSpacing="-0.02em"
+            fontWeight={800}
+            letterSpacing="-0.03em"
             gutterBottom={!!subtitle}
+            sx={{ lineHeight: 1.2 }}
           >
             {title}
           </Typography>
           {subtitle && (
-            <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 560 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 540, lineHeight: 1.65 }}>
               {subtitle}
             </Typography>
           )}
         </Box>
-        {action}
+        {action && <Box sx={{ flexShrink: 0 }}>{action}</Box>}
       </Box>
+      {divider && <Divider sx={{ mb: 4 }} />}
     </FadeIn>
   );
 }
