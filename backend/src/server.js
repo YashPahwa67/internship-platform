@@ -11,14 +11,16 @@ async function start() {
   try {
     await connectRedis();
   } catch (err) {
+    if (config.nodeEnv === 'production') {
+      logger.error('Redis required in production', { message: err.message });
+      throw err;
+    }
     logger.warn(
-      'Redis is not running (ECONNREFUSED on port 6379). Start Redis, then restart the API:\n' +
+      'Redis is not running. Start Redis locally, or set REDIS_URL to Upstash on Render:\n' +
         '  • Docker:  docker compose up -d redis\n' +
-        '  • macOS:   brew install redis && brew services start redis\n' +
-        'Without Redis: in-memory rate limits only; refresh tokens and cache are degraded in development.',
+        '  • macOS:   brew install redis && brew services start redis',
       { message: err.message }
     );
-    if (config.nodeEnv === 'production') throw err;
   }
 
   initCloudinary();

@@ -16,32 +16,67 @@ export function getRedis() {
   return redis;
 }
 
+function isLocalRedis(url) {
+  return !url || url.includes('127.0.0.1') || url.includes('localhost');
+}
+
+function redisHost(url) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return 'unknown';
+  }
+}
+
 export async function connectRedis() {
   if (redisAvailable && redis) return redis;
 
-  const client = new Redis(config.redisUrl, {
-    maxRetriesPerRequest: 3,
-    enableReadyCheck: true,
+  const url = config.redisUrl;
+
+  if (config.nodeEnv === 'production' && isLocalRedis(url)) {
+    throw new Error(
+      'REDIS_URL is not set on Render. Go to imp-api → Environment → add REDIS_URL with your Upstash URL (rediss://default:...@....upstash.io:6379).'
+    );
+  }
+
+  // Upstash requires TLS (rediss://) and these ioredis options
+  const client = new Redis(url, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
     lazyConnect: true,
-    connectTimeout: 5000,
+    connectTimeout: 20000,
+    ...(url.startsWith('rediss://') ? { tls: {} } : {}),
     retryStrategy(times) {
-      if (times > 2) return null;
-      return Math.min(times * 300, 1000);
+      if (times > 10) return null;
+      return Math.min(times * 200, 2000);
     },
   });
 
   try {
     await client.connect();
+    const pong = await client.ping();
+    if (pong !== 'PONG') {
+      throw new Error(`Unexpected ping response: ${pong}`);
+    }
+
     client.on('error', (err) => {
       logger.error('Redis runtime error', { message: err.message });
     });
+
     redis = client;
     redisAvailable = true;
-    logger.info('Redis connected', { url: config.redisUrl.replace(/:[^:@]+@/, ':***@') });
+    logger.info('Redis connected', { host: redisHost(url) });
     return redis;
   } catch (err) {
-    client.disconnect();
-    throw err;
+    try {
+      client.disconnect();
+    } catch {
+      /* already closed */
+    }
+    throw new Error(
+      `Redis connection failed (${redisHost(url)}): ${err.message}. ` +
+        'Use the Upstash TCP URL starting with rediss:// as REDIS_URL on Render.'
+    );
   }
 }
 

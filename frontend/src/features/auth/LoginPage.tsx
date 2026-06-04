@@ -5,8 +5,6 @@ import { useLoginMutation } from '../../api/authApi';
 import { useAppDispatch } from '../../app/hooks';
 import { setCredentials } from './authSlice';
 import AuthCard from '../../components/ui/AuthCard';
-import { tokens } from '../../theme/designTokens';
-import { useThemeMode } from '../../theme/ThemeProvider';
 
 const roleRedirect: Record<string, string> = {
   admin: '/admin/dashboard',
@@ -22,8 +20,6 @@ export default function LoginPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [error, setError] = useState('');
-  const { mode } = useThemeMode();
-  const t = tokens[mode];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,8 +29,8 @@ export default function LoginPage() {
       dispatch(setCredentials({ user: res.data.user, accessToken: res.data.accessToken }));
       navigate(roleRedirect[res.data.user.role] || '/');
     } catch (err: unknown) {
-      const e = err as { data?: { message?: string; error?: { message?: string } } };
-      setError(e?.data?.message || e?.data?.error?.message || 'Login failed');
+      const e = err as { data?: { error?: { message?: string } } };
+      setError(e?.data?.error?.message || 'Login failed');
     }
   };
 
@@ -44,7 +40,12 @@ export default function LoginPage() {
       <Box component="form" onSubmit={handleSubmit}>
         <TextField fullWidth label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} margin="normal" required />
         <TextField fullWidth label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} margin="normal" required />
-        <Button fullWidth type="submit" variant="contained" size="large" sx={{ mt: 3 }} disabled={isLoading}>
+        <Box sx={{ textAlign: 'right', mt: 0.5 }}>
+          <Link component={RouterLink} to="/forgot-password" variant="body2" color="text.secondary">
+            Forgot password?
+          </Link>
+        </Box>
+        <Button fullWidth type="submit" variant="contained" size="large" sx={{ mt: 2 }} disabled={isLoading}>
           {isLoading ? 'Signing in...' : 'Sign in'}
         </Button>
       </Box>
@@ -52,14 +53,6 @@ export default function LoginPage() {
         Don&apos;t have an account?{' '}
         <Link component={RouterLink} to="/register" color="text.primary" fontWeight={600}>Register</Link>
       </Typography>
-      <Box sx={{ mt: 2, p: 2, borderRadius: 2, bgcolor: t.bgMuted, border: `1px solid ${t.border}` }}>
-        <Typography variant="caption" color="text.secondary" display="block">
-          HR: hr@acme.com / Company123!
-        </Typography>
-        <Typography variant="caption" color="text.secondary" display="block">
-          Student: student@university.edu / Student123!
-        </Typography>
-      </Box>
     </AuthCard>
   );
 }

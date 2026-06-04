@@ -1,10 +1,14 @@
 import { useEffect, useState, useRef } from 'react';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
-  TextField, Button, Box, Chip, Alert, Avatar, Typography, Divider, IconButton,
+  TextField, Button, Box, Chip, Alert, Avatar, Typography, Divider, IconButton, Link,
+  Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress,
 } from '@mui/material';
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import {
   useGetProfileQuery,
   useUpdateProfileMutation,
@@ -13,11 +17,17 @@ import {
   useDeleteProfilePictureMutation,
   useDeleteResumeMutation,
 } from '../../api/studentApi';
+import { useDeleteAccountMutation, useRequestEmailChangeMutation, useConfirmEmailChangeMutation, useChangePasswordMutation } from '../../api/authApi';
 import { useAppDispatch } from '../../app/hooks';
+import { logout, patchUser, selectUser } from '../auth/authSlice';
+import { useAppSelector } from '../../app/hooks';
 import { syncProfileToAuth } from '../../utils/syncProfileToAuth';
+import { baseApi } from '../../api/baseApi';
 import PageHeader from '../../components/ui/PageHeader';
 import PremiumCard from '../../components/ui/PremiumCard';
 import FadeIn from '../../components/ui/FadeIn';
+import { useThemeMode } from '../../theme/ThemeProvider';
+import { tokens } from '../../theme/designTokens';
 
 type FormState = {
   fullName: string;
@@ -36,14 +46,37 @@ type FormState = {
 
 export default function StudentProfilePage() {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const { mode } = useThemeMode();
+  const t = tokens[mode];
   const { data, refetch } = useGetProfileQuery(undefined);
   const [update, { isLoading, isSuccess, isError: saveError }] = useUpdateProfileMutation();
   const [uploadPicture, { isLoading: uploadingPicture }] = useUploadProfilePictureMutation();
   const [uploadResume, { isLoading: uploadingResume }] = useUploadResumeMutation();
   const [deletePicture] = useDeleteProfilePictureMutation();
   const [deleteResume] = useDeleteResumeMutation();
+  const [deleteAccount, { isLoading: deleting }] = useDeleteAccountMutation();
+  const [changePasswordApi, { isLoading: changingPwd }] = useChangePasswordMutation();
+  const [pwdDialogOpen, setPwdDialogOpen] = useState(false);
+  const [pwdForm, setPwdForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
+  const [pwdError, setPwdError] = useState('');
+  const [pwdSuccess, setPwdSuccess] = useState(false);
   const pictureInputRef = useRef<HTMLInputElement>(null);
   const resumeInputRef = useRef<HTMLInputElement>(null);
+  const currentUser = useAppSelector(selectUser);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+
+  // Email change state
+  const [requestEmailChange, { isLoading: requesting }] = useRequestEmailChangeMutation();
+  const [confirmEmailChange, { isLoading: confirming }] = useConfirmEmailChangeMutation();
+  const [emailDialogStep, setEmailDialogStep] = useState<'closed' | 'input' | 'otp'>('closed');
+  const [newEmail, setNewEmail] = useState('');
+  const [emailOtpDigits, setEmailOtpDigits] = useState<string[]>(Array(6).fill(''));
+  const emailOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [emailChangeError, setEmailChangeError] = useState('');
+  const [emailChangeSuccess, setEmailChangeSuccess] = useState('');
 
   const profile = data?.data;
   const [form, setForm] = useState<FormState>({
@@ -134,9 +167,92 @@ export default function StudentProfilePage() {
     refetch();
   };
 
+  const openPwdDialog = () => {
+    setPwdForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+    setPwdError('');
+    setPwdSuccess(false);
+    setPwdDialogOpen(true);
+  };
+
+  const handleChangePassword = async () => {
+    setPwdError('');
+    if (pwdForm.newPassword !== pwdForm.confirmPassword) {
+      setPwdError('New passwords do not match'); return;
+    }
+    try {
+      await changePasswordApi({ oldPassword: pwdForm.oldPassword, newPassword: pwdForm.newPassword }).unwrap();
+      setPwdSuccess(true);
+      setTimeout(() => setPwdDialogOpen(false), 1500);
+    } catch (err: unknown) {
+      const e = err as { data?: { error?: { message?: string } } };
+      setPwdError(e?.data?.error?.message || 'Failed to update password');
+    }
+  };
+
+  const handleRequestEmailChange = async () => {
+    setEmailChangeError('');
+    try {
+      await requestEmailChange({ newEmail }).unwrap();
+      setEmailOtpDigits(Array(6).fill(''));
+      setEmailDialogStep('otp');
+      setTimeout(() => emailOtpRefs.current[0]?.focus(), 100);
+    } catch (err: unknown) {
+      const e = err as { data?: { error?: { message?: string } } };
+      setEmailChangeError(e?.data?.error?.message || 'Failed to send code');
+    }
+  };
+
+  const handleEmailOtpChange = (index: number, value: string) => {
+    const digit = value.replace(/\D/g, '').slice(-1);
+    const next = [...emailOtpDigits];
+    next[index] = digit;
+    setEmailOtpDigits(next);
+    setEmailChangeError('');
+    if (digit && index < 5) emailOtpRefs.current[index + 1]?.focus();
+    if (next.every(Boolean)) handleConfirmEmailChange(next.join(''));
+  };
+
+  const handleEmailOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      if (emailOtpDigits[index]) {
+        const next = [...emailOtpDigits]; next[index] = ''; setEmailOtpDigits(next);
+      } else emailOtpRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleConfirmEmailChange = async (otp: string) => {
+    if (otp.length !== 6) return;
+    setEmailChangeError('');
+    try {
+      const res = await confirmEmailChange({ otp }).unwrap();
+      dispatch(patchUser({ email: res.data.user.email }));
+      setEmailChangeSuccess(`Email updated to ${res.data.user.email}`);
+      setEmailDialogStep('closed');
+      setNewEmail('');
+    } catch (err: unknown) {
+      const e = err as { data?: { error?: { message?: string } } };
+      setEmailChangeError(e?.data?.error?.message || 'Invalid code');
+      setEmailOtpDigits(Array(6).fill(''));
+      setTimeout(() => emailOtpRefs.current[0]?.focus(), 50);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (confirmText !== 'DELETE') return;
+    setDeleteError('');
+    try {
+      await deleteAccount(undefined).unwrap();
+      dispatch(logout());
+      baseApi.util.resetApiState();
+      navigate('/login');
+    } catch {
+      setDeleteError('Failed to delete account. Please try again.');
+    }
+  };
+
   return (
     <Box maxWidth={720}>
-      <PageHeader title="Profile" subtitle="Your data is stored securely in MongoDB Atlas. Files are hosted on Cloudinary." />
+      <PageHeader title="Profile" />
 
       {isSuccess && <Alert severity="success" sx={{ mb: 2 }}>Profile saved.</Alert>}
       {saveError && <Alert severity="error" sx={{ mb: 2 }}>Failed to save profile.</Alert>}
@@ -240,7 +356,268 @@ export default function StudentProfilePage() {
             </Button>
           </Box>
         </PremiumCard>
+
+        {/* Email change */}
+        {emailChangeSuccess && (
+          <Alert severity="success" sx={{ mt: 3 }} onClose={() => setEmailChangeSuccess('')}>
+            {emailChangeSuccess}
+          </Alert>
+        )}
+        <PremiumCard hover={false} sx={{ mt: 3 }}>
+          <Box sx={{ p: { xs: 3, md: 4 } }}>
+            <Typography variant="subtitle2" fontWeight={600} gutterBottom>Email address</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Current: <Box component="span" fontWeight={600} color="text.primary">{currentUser?.email}</Box>
+            </Typography>
+            <Button variant="outlined" color="inherit" size="small" onClick={() => { setEmailDialogStep('input'); setEmailChangeError(''); setNewEmail(''); }}>
+              Change email
+            </Button>
+          </Box>
+        </PremiumCard>
+
+        {/* Change password — button only */}
+        <PremiumCard hover={false} sx={{ mt: 3 }}>
+          <Box sx={{ p: { xs: 3, md: 4 }, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+            <Box>
+              <Typography variant="subtitle2" fontWeight={600}>Password</Typography>
+              <Typography variant="body2" color="text.secondary">Update your account password</Typography>
+            </Box>
+            <Button variant="outlined" color="inherit" startIcon={<LockOutlinedIcon />} onClick={openPwdDialog}>
+              Change password
+            </Button>
+          </Box>
+        </PremiumCard>
+
+        {/* Danger zone */}
+        <PremiumCard hover={false} sx={{ mt: 3, border: `1px solid`, borderColor: 'error.main', borderRadius: 2 }}>
+          <Box sx={{ p: { xs: 3, md: 4 } }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <WarningAmberIcon color="error" fontSize="small" />
+              <Typography variant="subtitle2" fontWeight={700} color="error.main">
+                Danger zone
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+              Permanently delete your account and all associated data — profile, applications, and uploaded files. This action cannot be undone.
+            </Typography>
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteOutlineIcon />}
+              onClick={() => { setConfirmText(''); setDeleteError(''); setDeleteDialogOpen(true); }}
+            >
+              Delete my account
+            </Button>
+          </Box>
+        </PremiumCard>
       </FadeIn>
+
+      {/* Change password dialog */}
+      <Dialog
+        open={pwdDialogOpen}
+        onClose={() => !changingPwd && setPwdDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle fontWeight={700}>Change password</DialogTitle>
+        <DialogContent>
+          {pwdSuccess ? (
+            <Alert severity="success">Password updated!</Alert>
+          ) : (
+            <>
+              <TextField
+                fullWidth type="password" label="Current password"
+                value={pwdForm.oldPassword}
+                onChange={(e) => { setPwdForm({ ...pwdForm, oldPassword: e.target.value }); setPwdError(''); }}
+                margin="normal" autoComplete="current-password" autoFocus
+              />
+              <TextField
+                fullWidth type="password" label="New password"
+                value={pwdForm.newPassword}
+                onChange={(e) => { setPwdForm({ ...pwdForm, newPassword: e.target.value }); setPwdError(''); }}
+                margin="normal" helperText="Min 8 chars with upper, lower, and digit"
+                autoComplete="new-password"
+              />
+              <TextField
+                fullWidth type="password" label="Confirm new password"
+                value={pwdForm.confirmPassword}
+                onChange={(e) => { setPwdForm({ ...pwdForm, confirmPassword: e.target.value }); setPwdError(''); }}
+                margin="normal" autoComplete="new-password"
+              />
+              {pwdError && <Alert severity="error" sx={{ mt: 1.5 }}>{pwdError}</Alert>}
+              <Box sx={{ mt: 1.5 }}>
+                <Link component={RouterLink} to="/forgot-password" variant="body2" color="text.secondary"
+                  onClick={() => setPwdDialogOpen(false)}>
+                  Forgot password?
+                </Link>
+              </Box>
+            </>
+          )}
+        </DialogContent>
+        {!pwdSuccess && (
+          <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+            <Button variant="outlined" color="inherit" fullWidth onClick={() => setPwdDialogOpen(false)} disabled={changingPwd}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained" fullWidth onClick={handleChangePassword}
+              disabled={!pwdForm.oldPassword || !pwdForm.newPassword || !pwdForm.confirmPassword || changingPwd}
+              startIcon={changingPwd ? <CircularProgress size={16} color="inherit" /> : null}
+            >
+              {changingPwd ? 'Updating…' : 'Update'}
+            </Button>
+          </DialogActions>
+        )}
+      </Dialog>
+
+      {/* Email change dialog */}
+      <Dialog
+        open={emailDialogStep !== 'closed'}
+        onClose={() => !requesting && !confirming && setEmailDialogStep('closed')}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        {emailDialogStep === 'input' && (
+          <>
+            <DialogTitle sx={{ pb: 1 }}>Change email address</DialogTitle>
+            <DialogContent>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Enter your new email. We'll send a verification code to confirm.
+              </Typography>
+              <TextField
+                fullWidth
+                type="email"
+                label="New email address"
+                value={newEmail}
+                onChange={(e) => { setNewEmail(e.target.value); setEmailChangeError(''); }}
+                disabled={requesting}
+                autoFocus
+              />
+              {emailChangeError && <Alert severity="error" sx={{ mt: 2 }}>{emailChangeError}</Alert>}
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+              <Button variant="outlined" color="inherit" onClick={() => setEmailDialogStep('closed')} disabled={requesting} fullWidth>Cancel</Button>
+              <Button
+                variant="contained"
+                onClick={handleRequestEmailChange}
+                disabled={!newEmail || requesting}
+                startIcon={requesting ? <CircularProgress size={16} color="inherit" /> : null}
+                fullWidth
+              >
+                {requesting ? 'Sending…' : 'Send code'}
+              </Button>
+            </DialogActions>
+          </>
+        )}
+
+        {emailDialogStep === 'otp' && (
+          <>
+            <DialogTitle sx={{ pb: 1 }}>Enter verification code</DialogTitle>
+            <DialogContent>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                We sent a 6-digit code to <Box component="span" fontWeight={600} color="text.primary">{newEmail}</Box>
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', mb: 1 }}>
+                {emailOtpDigits.map((d, i) => (
+                  <Box
+                    key={i}
+                    component="input"
+                    ref={(el: HTMLInputElement | null) => { emailOtpRefs.current[i] = el; }}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={d}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleEmailOtpChange(i, e.target.value)}
+                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleEmailOtpKeyDown(i, e)}
+                    onFocus={(e: React.FocusEvent<HTMLInputElement>) => e.target.select()}
+                    sx={{
+                      width: 44, height: 52, textAlign: 'center',
+                      fontSize: '1.4rem', fontWeight: 700, fontFamily: 'monospace',
+                      border: '2px solid', borderColor: emailChangeError ? 'error.main' : d ? 'primary.main' : t.border,
+                      borderRadius: 1.5, outline: 'none', bgcolor: 'transparent', color: 'text.primary',
+                      caretColor: 'transparent', cursor: 'pointer',
+                      '&:focus': { borderColor: emailChangeError ? 'error.main' : 'primary.main' },
+                    }}
+                  />
+                ))}
+              </Box>
+              {emailChangeError && <Alert severity="error" sx={{ mt: 2 }}>{emailChangeError}</Alert>}
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+              <Button variant="outlined" color="inherit" onClick={() => setEmailDialogStep('input')} disabled={confirming} fullWidth>Back</Button>
+              <Button
+                variant="contained"
+                onClick={() => handleConfirmEmailChange(emailOtpDigits.join(''))}
+                disabled={emailOtpDigits.some(d => !d) || confirming}
+                startIcon={confirming ? <CircularProgress size={16} color="inherit" /> : null}
+                fullWidth
+              >
+                {confirming ? 'Confirming…' : 'Confirm'}
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
+
+      {/* Confirmation dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => !deleting && setDeleteDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <WarningAmberIcon color="error" />
+            <Typography variant="h6" fontWeight={700}>Delete account?</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+            This will permanently delete your account, student profile, all applications, and uploaded files. There is no way to recover this data.
+          </Typography>
+          <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
+            Type <Box component="span" sx={{ fontFamily: 'monospace', bgcolor: t.bgMuted, px: 0.75, py: 0.25, borderRadius: 1 }}>DELETE</Box> to confirm
+          </Typography>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="DELETE"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            disabled={deleting}
+            autoComplete="off"
+            sx={{ '& input': { fontFamily: 'monospace', letterSpacing: 1 } }}
+          />
+          {deleteError && (
+            <Alert severity="error" sx={{ mt: 2 }}>{deleteError}</Alert>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+          <Button
+            variant="outlined"
+            color="inherit"
+            onClick={() => setDeleteDialogOpen(false)}
+            disabled={deleting}
+            fullWidth
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteAccount}
+            disabled={confirmText !== 'DELETE' || deleting}
+            startIcon={deleting ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
+            fullWidth
+          >
+            {deleting ? 'Deleting…' : 'Delete account'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

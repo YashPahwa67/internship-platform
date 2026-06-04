@@ -10,6 +10,8 @@ import InternshipBrowsePage from './features/public/InternshipBrowsePage';
 import InternshipDetailPage from './features/public/InternshipDetailPage';
 import LoginPage from './features/auth/LoginPage';
 import RegisterPage from './features/auth/RegisterPage';
+import VerifyOtpPage from './features/auth/VerifyOtpPage';
+import ForgotPasswordPage from './features/auth/ForgotPasswordPage';
 
 import StudentDashboard from './features/student/StudentDashboard';
 import StudentInternshipsPage from './features/student/StudentInternshipsPage';
@@ -41,6 +43,8 @@ export default function App() {
         <Route path="/internships/:id" element={<InternshipDetailPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/verify-otp" element={<VerifyOtpPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       </Route>
 
       <Route element={<ProtectedRoute />}>

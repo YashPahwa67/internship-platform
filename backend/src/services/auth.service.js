@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { User } from '../models/User.js';
 import { Student } from '../models/Student.js';
@@ -10,6 +11,8 @@ import {
   revokeRefreshToken,
   validateRefreshToken,
 } from './redisToken.service.js';
+import { sendOtpEmail, sendEmailChangeOtp, sendPasswordResetOtp } from './email.service.js';
+import { config } from '../config/env.js';
 
 function slugify(text) {
   return text
@@ -18,9 +21,43 @@ function slugify(text) {
     .replace(/(^-|-$)/g, '');
 }
 
+function generateOtp() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+async function sendOtp(email, firstName, otp) {
+  try {
+    await sendOtpEmail({ to: email, firstName, otp });
+  } catch (err) {
+    logger.error('OTP email failed', { email, reason: err.message });
+    if (config.nodeEnv !== 'production') {
+      console.log(`\n\x1b[33m[DEV] OTP for ${email}: \x1b[1m${otp}\x1b[0m\n`);
+    }
+  }
+}
+
 export async function register({ email, password, role, firstName, lastName, companyName }) {
   const existing = await User.findOne({ email });
-  if (existing) throw new ApiError(409, 'EMAIL_EXISTS', 'Email already registered');
+  if (existing) {
+    if (!existing.emailVerified && existing.status === 'pending_verification') {
+      // Unverified — update name and resend a fresh OTP
+      const otp = generateOtp();
+      const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+      await User.findByIdAndUpdate(existing._id, {
+        $set: { firstName, lastName, emailVerificationToken: otp, emailVerificationExpiry: otpExpiry },
+      });
+      if (existing.role === ROLES.STUDENT) {
+        await Student.findOneAndUpdate(
+          { userId: existing._id },
+          { $set: { fullName: [firstName, lastName].filter(Boolean).join(' ').trim() } },
+          { upsert: true }
+        );
+      }
+      await sendOtp(email, firstName, otp);
+      return { requiresVerification: true, email };
+    }
+    throw new ApiError(409, 'EMAIL_EXISTS', 'Email already registered');
+  }
 
   const passwordHash = await User.hashPassword(password);
   let companyId = null;
@@ -28,23 +65,19 @@ export async function register({ email, password, role, firstName, lastName, com
   if (role === ROLES.COMPANY_HR) {
     if (!companyName) throw new ApiError(400, 'VALIDATION_ERROR', 'Company name is required');
     const slug = slugify(companyName) + '-' + Date.now().toString(36);
-    const company = await Company.create({
-      name: companyName,
-      slug,
-      approvalStatus: 'pending',
-    });
+    const company = await Company.create({ name: companyName, slug, approvalStatus: 'pending' });
     companyId = company._id;
   }
 
+  const otp = generateOtp();
+  const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
   const user = await User.create({
-    email,
-    passwordHash,
-    role,
-    firstName,
-    lastName,
-    companyId,
-    status: 'active',
-    emailVerified: true,
+    email, passwordHash, role, firstName, lastName, companyId,
+    status: 'pending_verification',
+    emailVerified: false,
+    emailVerificationToken: otp,
+    emailVerificationExpiry: otpExpiry,
     refreshTokenFamily: uuidv4(),
   });
 
@@ -56,9 +89,165 @@ export async function register({ email, password, role, firstName, lastName, com
     });
   }
 
-  const tokens = await issueTokens(user);
-  const populated = await User.findById(user._id).populate('companyId', 'name approvalStatus');
-  return { user: sanitizeUser(populated), ...tokens };
+  await sendOtp(email, firstName, otp);
+  return { requiresVerification: true, email };
+}
+
+export async function verifyOtp(email, otp) {
+  const user = await User.findOne({ email })
+    .select('+emailVerificationToken +emailVerificationExpiry');
+
+  if (!user) throw new ApiError(404, 'NOT_FOUND', 'No account found with that email');
+  if (user.emailVerified) throw new ApiError(400, 'ALREADY_VERIFIED', 'Email is already verified');
+  if (!user.emailVerificationToken || user.emailVerificationToken !== otp) {
+    throw new ApiError(400, 'INVALID_OTP', 'Invalid verification code');
+  }
+  if (user.emailVerificationExpiry < new Date()) {
+    throw new ApiError(400, 'OTP_EXPIRED', 'Code has expired. Please request a new one.');
+  }
+
+  await User.findByIdAndUpdate(user._id, {
+    $set: { emailVerified: true, status: 'active' },
+    $unset: { emailVerificationToken: 1, emailVerificationExpiry: 1 },
+  });
+
+  if (user.role === ROLES.STUDENT) {
+    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+    await Student.findOneAndUpdate({ userId: user._id }, { $set: { fullName } }, { upsert: true });
+  }
+
+  const updatedUser = await User.findById(user._id).populate('companyId', 'name approvalStatus');
+  const tokens = await issueTokens(updatedUser);
+  return { user: sanitizeUser(updatedUser), ...tokens };
+}
+
+export async function resendOtp(email) {
+  const user = await User.findOne({ email });
+  if (!user) throw new ApiError(404, 'NOT_FOUND', 'No account found with that email');
+  if (user.emailVerified) throw new ApiError(400, 'ALREADY_VERIFIED', 'Email is already verified');
+
+  const otp = generateOtp();
+  const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+  await User.findByIdAndUpdate(user._id, {
+    $set: { emailVerificationToken: otp, emailVerificationExpiry: otpExpiry },
+  });
+  await sendOtp(email, user.firstName, otp);
+  return { message: 'New code sent' };
+}
+
+export async function changePassword(userId, oldPassword, newPassword) {
+  const user = await User.findById(userId).select('+passwordHash');
+  if (!user) throw new ApiError(404, 'NOT_FOUND', 'User not found');
+
+  const valid = await user.comparePassword(oldPassword);
+  if (!valid) throw new ApiError(400, 'WRONG_PASSWORD', 'Current password is incorrect');
+
+  const passwordHash = await User.hashPassword(newPassword);
+  await User.findByIdAndUpdate(userId, { $set: { passwordHash } });
+  return { message: 'Password updated' };
+}
+
+export async function forgotPassword(email) {
+  const user = await User.findOne({ email: email.toLowerCase().trim() });
+  // Don't reveal whether email exists
+  if (!user) return { message: 'If that email is registered, a code has been sent' };
+
+  const otp = generateOtp();
+  const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+  await User.findByIdAndUpdate(user._id, {
+    $set: { passwordResetOtp: otp, passwordResetOtpExpiry: otpExpiry },
+  });
+
+  try {
+    await sendPasswordResetOtp({ to: email, firstName: user.firstName, otp });
+  } catch (err) {
+    logger.error('Password reset OTP failed', { reason: err.message });
+    if (config.nodeEnv !== 'production') {
+      console.log(`\n\x1b[33m[DEV] Password reset OTP for ${email}: \x1b[1m${otp}\x1b[0m\n`);
+    }
+  }
+
+  return { message: 'If that email is registered, a code has been sent' };
+}
+
+export async function resetPassword(email, otp, newPassword) {
+  const user = await User.findOne({ email: email.toLowerCase().trim() })
+    .select('+passwordResetOtp +passwordResetOtpExpiry');
+
+  if (!user || !user.passwordResetOtp) throw new ApiError(400, 'INVALID_OTP', 'Invalid or expired code');
+  if (user.passwordResetOtp !== otp) throw new ApiError(400, 'INVALID_OTP', 'Invalid verification code');
+  if (user.passwordResetOtpExpiry < new Date()) throw new ApiError(400, 'OTP_EXPIRED', 'Code has expired. Please request a new one.');
+
+  const passwordHash = await User.hashPassword(newPassword);
+  await User.findByIdAndUpdate(user._id, {
+    $set: { passwordHash },
+    $unset: { passwordResetOtp: 1, passwordResetOtpExpiry: 1 },
+  });
+
+  return { message: 'Password reset successfully' };
+}
+
+export async function requestEmailChange(userId, newEmail) {
+  const normalized = newEmail.toLowerCase().trim();
+  const taken = await User.findOne({ email: normalized });
+  if (taken) throw new ApiError(409, 'EMAIL_EXISTS', 'That email is already in use');
+
+  const user = await User.findById(userId);
+  if (!user) throw new ApiError(404, 'NOT_FOUND', 'User not found');
+  if (user.email === normalized) throw new ApiError(400, 'SAME_EMAIL', 'New email is the same as current');
+
+  const otp = generateOtp();
+  const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+  await User.findByIdAndUpdate(userId, {
+    $set: { pendingEmail: normalized, pendingEmailOtp: otp, pendingEmailOtpExpiry: otpExpiry },
+  });
+
+  try {
+    await sendEmailChangeOtp({ to: normalized, firstName: user.firstName, otp });
+  } catch (err) {
+    logger.error('Email change OTP failed', { reason: err.message });
+    if (config.nodeEnv !== 'production') {
+      console.log(`\n\x1b[33m[DEV] Email change OTP for ${normalized}: \x1b[1m${otp}\x1b[0m\n`);
+    }
+  }
+
+  return { message: 'Verification code sent to new email' };
+}
+
+export async function confirmEmailChange(userId, otp) {
+  const user = await User.findById(userId)
+    .select('+pendingEmail +pendingEmailOtp +pendingEmailOtpExpiry');
+
+  if (!user) throw new ApiError(404, 'NOT_FOUND', 'User not found');
+  if (!user.pendingEmail) throw new ApiError(400, 'NO_PENDING', 'No email change request found');
+  if (user.pendingEmailOtp !== otp) throw new ApiError(400, 'INVALID_OTP', 'Invalid verification code');
+  if (user.pendingEmailOtpExpiry < new Date()) {
+    throw new ApiError(400, 'OTP_EXPIRED', 'Code has expired. Please request a new one.');
+  }
+
+  const newEmail = user.pendingEmail;
+
+  // Check again in case someone else registered with this email in the meantime
+  const taken = await User.findOne({ email: newEmail, _id: { $ne: userId } });
+  if (taken) throw new ApiError(409, 'EMAIL_EXISTS', 'That email was just taken by another account');
+
+  await User.findByIdAndUpdate(userId, {
+    $set: { email: newEmail },
+    $unset: { pendingEmail: 1, pendingEmailOtp: 1, pendingEmailOtpExpiry: 1 },
+  });
+
+  const updated = await User.findById(userId).populate('companyId', 'name approvalStatus');
+  return { user: sanitizeUser(updated) };
+}
+
+export async function deleteAccount(userId) {
+  const user = await User.findById(userId);
+  if (!user) throw new ApiError(404, 'NOT_FOUND', 'User not found');
+
+  await Student.deleteOne({ userId });
+  await revokeRefreshToken(userId.toString());
+  await User.findByIdAndDelete(userId);
 }
 
 export async function login({ email, password }) {

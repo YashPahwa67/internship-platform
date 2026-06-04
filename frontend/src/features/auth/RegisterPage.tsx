@@ -4,8 +4,6 @@ import {
   TextField, Button, Alert, Box, Link, Typography, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
 import { useRegisterMutation } from '../../api/authApi';
-import { useAppDispatch } from '../../app/hooks';
-import { setCredentials } from './authSlice';
 import AuthCard from '../../components/ui/AuthCard';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { tokens } from '../../theme/designTokens';
@@ -14,7 +12,6 @@ export default function RegisterPage() {
   const [role, setRole] = useState<'student' | 'company_hr'>('student');
   const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', companyName: '' });
   const [register, { isLoading }] = useRegisterMutation();
-  const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const { mode } = useThemeMode();
@@ -32,9 +29,8 @@ export default function RegisterPage() {
         role,
         ...(role === 'company_hr' ? { companyName: form.companyName } : {}),
       };
-      const res = await register(payload).unwrap();
-      dispatch(setCredentials({ user: res.data.user, accessToken: res.data.accessToken }));
-      navigate(role === 'student' ? '/student/dashboard' : '/company/dashboard');
+      await register(payload).unwrap();
+      navigate('/verify-otp', { state: { email: form.email } });
     } catch (err: unknown) {
       const e = err as { data?: { error?: { message?: string; details?: { message: string }[] } } };
       setError(e?.data?.error?.details?.[0]?.message || e?.data?.error?.message || 'Registration failed');
