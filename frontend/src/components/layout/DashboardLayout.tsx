@@ -24,6 +24,7 @@ import { patchUser, syncFromStudentProfile, logout } from '../../features/auth/a
 import { useLogoutMutation, useMeQuery } from '../../api/authApi';
 import { useDisplayUser } from '../../hooks/useDisplayUser';
 import { useGetNotificationsQuery } from '../../api/notificationApi';
+import { useSSE } from '../../hooks/useSSE';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { useNavbarScroll } from '../../hooks/useNavbarScroll';
 import { tokens } from '../../theme/designTokens';
@@ -80,6 +81,7 @@ export default function DashboardLayout() {
   const [logoutApi] = useLogoutMutation();
   const { data: meData } = useMeQuery(undefined, { skip: !user?.id });
   const { data: notifData } = useGetNotificationsQuery(undefined, { skip: !user?.id });
+  useSSE(); // real-time notification push via Server-Sent Events
 
   useEffect(() => {
     const me = meData?.data;

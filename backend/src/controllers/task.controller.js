@@ -1,9 +1,12 @@
 import { Task } from '../models/Task.js';
 import { Application } from '../models/Application.js';
+import { User } from '../models/User.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ROLES } from '../constants/roles.js';
 import { notifyUser } from '../services/notification.service.js';
+import { enqueueEmail } from '../jobs/emailQueue.js';
+import logger from '../utils/logger.js';
 
 export const list = asyncHandler(async (req, res) => {
   let filter = {};
@@ -48,6 +51,17 @@ export const create = asyncHandler(async (req, res) => {
     { taskId: task._id }
   );
 
+  const student = await User.findById(application.userId).select('email firstName').lean();
+  if (student?.email) {
+    await enqueueEmail('task.assigned', {
+      to: student.email,
+      name: student.firstName,
+      taskTitle: task.title,
+      taskDescription: task.description,
+      deadline: task.deadline,
+    }).catch((e) => logger.warn('Email queue failed', { message: e.message }));
+  }
+
   res.status(201).json({ success: true, data: formatTask(task) });
 });
 
@@ -82,6 +96,17 @@ export const review = asyncHandler(async (req, res) => {
   await notifyUser(task.assignedTo, 'task.reviewed', 'Task reviewed', `Feedback on: ${task.title}`, {
     taskId: task._id,
   });
+
+  const student = await User.findById(task.assignedTo).select('email firstName').lean();
+  if (student?.email) {
+    await enqueueEmail('task.reviewed', {
+      to: student.email,
+      name: student.firstName,
+      taskTitle: task.title,
+      status: req.body.status,
+      feedback: req.body.feedback,
+    }).catch((e) => logger.warn('Email queue failed', { message: e.message }));
+  }
 
   res.json({ success: true, data: formatTask(task) });
 });

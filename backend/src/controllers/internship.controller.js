@@ -15,12 +15,25 @@ function slugify(text) {
 }
 
 export const list = asyncHandler(async (req, res) => {
-  const { cursor, limit = 20, q, skills, type, location, stipendMin } = req.query;
+  const { cursor, limit = 20, q, skills, type, location, stipendMin, stipendMax, durationMin, durationMax } = req.query;
   const filter = { status: 'published' };
 
   if (location) filter.location = new RegExp(location, 'i');
-  if (type) filter.type = type;
-  if (stipendMin) filter['stipend.min'] = { $gte: parseInt(stipendMin, 10) };
+  if (type) {
+    const types = type.split(',').map((t) => t.trim()).filter(Boolean);
+    if (types.length === 1) filter.type = types[0];
+    else if (types.length > 1) filter.type = { $in: types };
+  }
+  if (stipendMin || stipendMax) {
+    filter['stipend.min'] = {};
+    if (stipendMin) filter['stipend.min'].$gte = parseInt(stipendMin, 10);
+    if (stipendMax) filter['stipend.min'].$lte = parseInt(stipendMax, 10);
+  }
+  if (durationMin || durationMax) {
+    filter.durationWeeks = {};
+    if (durationMin) filter.durationWeeks.$gte = parseInt(durationMin, 10);
+    if (durationMax) filter.durationWeeks.$lte = parseInt(durationMax, 10);
+  }
   if (skills) filter.skills = { $in: skills.split(',').map((s) => s.trim()) };
   if (q) {
     const term = q.trim();
