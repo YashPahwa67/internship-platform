@@ -262,7 +262,7 @@ export async function login({ email, password }) {
   }
 
   if (user.status === 'deleted') {
-    throw new ApiError(403, 'ACCOUNT_DELETED', 'This account has been removed from IMP. Contact yashpahwa1209@gmail.com for assistance.');
+    throw new ApiError(403, 'ACCOUNT_DELETED', 'Your account has been blocked by admin.');
   }
 
   if (user.status === 'suspended') {
@@ -300,7 +300,7 @@ export async function refreshAccessToken(refreshToken) {
     throw new ApiError(401, 'UNAUTHORIZED', 'User not found or suspended');
   }
   if (user.status === 'deleted') {
-    throw new ApiError(403, 'ACCOUNT_DELETED', 'This account has been removed from IMP. Contact yashpahwa1209@gmail.com for assistance.');
+    throw new ApiError(403, 'ACCOUNT_DELETED', 'Your account has been blocked by admin.');
   }
 
   const accessToken = signAccessToken(user);

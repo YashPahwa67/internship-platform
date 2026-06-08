@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { TextField, Button, Alert, Box, Link, Typography } from '@mui/material';
-import BlockIcon from '@mui/icons-material/Block';
 import { useLoginMutation } from '../../api/authApi';
 import { useAppDispatch } from '../../app/hooks';
 import { setCredentials } from './authSlice';
@@ -22,59 +21,42 @@ export default function LoginPage() {
   const [login, { isLoading }] = useLoginMutation();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const [error, setError] = useState('');
-  const [isDeleted, setIsDeleted] = useState(false);
+  const [error, setError] = useState<{ text: string; isBlocked?: boolean } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setIsDeleted(false);
+    setError(null);
     try {
       const res = await login({ email, password }).unwrap();
       dispatch(setCredentials({ user: res.data.user, accessToken: res.data.accessToken }));
       navigate(roleRedirect[res.data.user.role] || '/');
     } catch (err: unknown) {
-      const e = err as { data?: { error?: { code?: string; message?: string } } };
+      const e = err as { data?: { message?: string; error?: { code?: string } } };
       const code = e?.data?.error?.code;
-      const message = e?.data?.error?.message || 'Login failed';
+      const message = e?.data?.message || 'Login failed';
       if (code === 'ACCOUNT_DELETED') {
-        setIsDeleted(true);
+        setError({ text: message, isBlocked: true });
       } else {
-        setError(message);
+        setError({ text: message });
       }
     }
   };
 
   return (
     <AuthCard title="Welcome back" subtitle="Sign in to your IMP account">
-      {/* Deleted account banner */}
-      {isDeleted && (
-        <Box sx={{
-          mb: 2, p: 2, borderRadius: '12px',
-          bgcolor: 'rgba(239,68,68,0.07)',
-          border: '1px solid rgba(239,68,68,0.25)',
-          display: 'flex', gap: 1.5, alignItems: 'flex-start',
-        }}>
-          <BlockIcon sx={{ fontSize: 20, color: '#ef4444', flexShrink: 0, mt: '1px' }} />
-          <Box>
-            <Typography variant="body2" fontWeight={600} sx={{ color: '#ef4444', mb: 0.25 }}>
-              Account removed from IMP
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
-              This account has been deleted. To appeal or recover access, contact us at{' '}
-              <Link
-                href={`mailto:${CONTACT_EMAIL}`}
-                sx={{ color: '#ef4444', fontWeight: 600, wordBreak: 'break-all' }}
-              >
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error.text}
+          {error.isBlocked && (
+            <>
+              {' '}Contact{' '}
+              <Link href={`mailto:${CONTACT_EMAIL}`} sx={{ color: 'inherit', fontWeight: 600 }}>
                 {CONTACT_EMAIL}
               </Link>
-            </Typography>
-          </Box>
-        </Box>
+            </>
+          )}
+        </Alert>
       )}
-
-      {/* Generic error */}
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <Box component="form" onSubmit={handleSubmit}>
         <TextField

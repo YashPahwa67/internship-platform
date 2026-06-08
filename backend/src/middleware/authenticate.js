@@ -14,7 +14,7 @@ export const authenticate = catchAsync(async (req, res, next) => {
     const user = await User.findById(payload.sub).select('-passwordHash').lean();
     if (!user) throw new ApiError(401, 'UNAUTHORIZED', 'Invalid session');
     if (user.status === 'deleted') {
-      throw new ApiError(403, 'ACCOUNT_DELETED', 'This account has been removed from IMP. Contact yashpahwa1209@gmail.com for assistance.');
+      throw new ApiError(403, 'ACCOUNT_DELETED', 'Your account has been blocked by admin.');
     }
     req.user = user;
     next();
