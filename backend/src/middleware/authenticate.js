@@ -12,8 +12,9 @@ export const authenticate = catchAsync(async (req, res, next) => {
   try {
     const payload = verifyAccessToken(token);
     const user = await User.findById(payload.sub).select('-passwordHash').lean();
-    if (!user || user.status === 'suspended') {
-      throw new ApiError(401, 'UNAUTHORIZED', 'Invalid session');
+    if (!user) throw new ApiError(401, 'UNAUTHORIZED', 'Invalid session');
+    if (user.status === 'deleted') {
+      throw new ApiError(403, 'ACCOUNT_DELETED', 'This account has been removed from IMP. Contact yashpahwa1209@gmail.com for assistance.');
     }
     req.user = user;
     next();

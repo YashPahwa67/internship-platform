@@ -261,6 +261,10 @@ export async function login({ email, password }) {
     throw new ApiError(423, 'ACCOUNT_LOCKED', 'Account temporarily locked');
   }
 
+  if (user.status === 'deleted') {
+    throw new ApiError(403, 'ACCOUNT_DELETED', 'This account has been removed from IMP. Contact yashpahwa1209@gmail.com for assistance.');
+  }
+
   if (user.status === 'suspended') {
     throw new ApiError(403, 'FORBIDDEN', 'Account suspended');
   }
@@ -294,6 +298,9 @@ export async function refreshAccessToken(refreshToken) {
   const user = await User.findById(userId).populate('companyId', 'name approvalStatus');
   if (!user || user.status === 'suspended') {
     throw new ApiError(401, 'UNAUTHORIZED', 'User not found or suspended');
+  }
+  if (user.status === 'deleted') {
+    throw new ApiError(403, 'ACCOUNT_DELETED', 'This account has been removed from IMP. Contact yashpahwa1209@gmail.com for assistance.');
   }
 
   const accessToken = signAccessToken(user);

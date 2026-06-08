@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { TextField, Button, Box, MenuItem, Alert, CircularProgress } from '@mui/material';
+import { TextField, Button, Box, MenuItem, Alert, CircularProgress, Typography } from '@mui/material';
+import BlockIcon from '@mui/icons-material/Block';
+import { alpha } from '@mui/material/styles';
 import {
   useCreateInternshipMutation,
   useUpdateInternshipMutation,
   useGetCompanyInternshipQuery,
 } from '../../api/internshipApi';
+import { useAppSelector } from '../../app/hooks';
+import { selectUser } from '../../features/auth/authSlice';
 import PageHeader from '../../components/ui/PageHeader';
 import PremiumCard from '../../components/ui/PremiumCard';
 import FadeIn from '../../components/ui/FadeIn';
@@ -26,6 +30,9 @@ export default function PostInternshipPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const user = useAppSelector(selectUser);
+  const isSuspended = user?.status === 'suspended';
+
   const { data: existing, isLoading: loadingExisting } = useGetCompanyInternshipQuery(id!, {
     skip: !isEdit,
   });
@@ -65,6 +72,10 @@ export default function PostInternshipPage() {
   const handleSubmit = async (e: React.FormEvent, submit: boolean) => {
     e.preventDefault();
     setError('');
+    if (isSuspended) {
+      setError('Your account is suspended. You cannot post or edit internships.');
+      return;
+    }
     try {
       if (isEdit && id) {
         await update({ id, ...buildPayload(submit) }).unwrap();
@@ -73,7 +84,12 @@ export default function PostInternshipPage() {
       }
       navigate('/company/internships');
     } catch (err: unknown) {
-      const e = err as { data?: { message?: string; error?: { message?: string } } };
+      const e = err as { data?: { message?: string; error?: { code?: string; message?: string } } };
+      const code = e?.data?.error?.code;
+      if (code === 'ACCOUNT_SUSPENDED') {
+        setError('Your account is suspended. Contact yashpahwa1209@gmail.com for assistance.');
+        return;
+      }
       setError(e?.data?.message || e?.data?.error?.message || 'Failed to save');
     }
   };
@@ -99,6 +115,24 @@ export default function PostInternshipPage() {
         }
       />
       <FadeIn>
+        {isSuspended && (
+          <Box sx={{
+            mb: 3, p: 2, borderRadius: '12px',
+            bgcolor: alpha('#f59e0b', 0.08),
+            border: `1px solid ${alpha('#f59e0b', 0.25)}`,
+            display: 'flex', gap: 1.5, alignItems: 'flex-start',
+          }}>
+            <BlockIcon sx={{ fontSize: 20, color: '#f59e0b', flexShrink: 0, mt: '1px' }} />
+            <Box>
+              <Typography variant="body2" fontWeight={600} sx={{ color: '#f59e0b', mb: 0.25 }}>
+                Account suspended
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Your account is suspended. You cannot post or edit internships until your account is restored by an admin.
+              </Typography>
+            </Box>
+          </Box>
+        )}
         <PremiumCard hover={false}>
           <Box component="form" sx={{ p: { xs: 3, md: 4 } }}>
             {error && (
@@ -113,6 +147,7 @@ export default function PostInternshipPage() {
               onChange={(e) => setForm({ ...form, title: e.target.value })}
               margin="normal"
               required
+              disabled={isSuspended}
             />
             <TextField
               fullWidth
@@ -123,6 +158,7 @@ export default function PostInternshipPage() {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               margin="normal"
               required
+              disabled={isSuspended}
             />
             <TextField
               fullWidth
@@ -130,6 +166,7 @@ export default function PostInternshipPage() {
               value={form.skills}
               onChange={(e) => setForm({ ...form, skills: e.target.value })}
               margin="normal"
+              disabled={isSuspended}
             />
             <TextField
               select
@@ -138,6 +175,7 @@ export default function PostInternshipPage() {
               value={form.type}
               onChange={(e) => setForm({ ...form, type: e.target.value })}
               margin="normal"
+              disabled={isSuspended}
             >
               {['remote', 'hybrid', 'onsite'].map((type) => (
                 <MenuItem key={type} value={type}>
@@ -151,6 +189,7 @@ export default function PostInternshipPage() {
               value={form.location}
               onChange={(e) => setForm({ ...form, location: e.target.value })}
               margin="normal"
+              disabled={isSuspended}
             />
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <TextField
@@ -160,6 +199,7 @@ export default function PostInternshipPage() {
                 onChange={(e) => setForm({ ...form, stipendMin: +e.target.value })}
                 margin="normal"
                 sx={{ flex: 1, minWidth: 120 }}
+                disabled={isSuspended}
               />
               <TextField
                 type="number"
@@ -168,6 +208,7 @@ export default function PostInternshipPage() {
                 onChange={(e) => setForm({ ...form, stipendMax: +e.target.value })}
                 margin="normal"
                 sx={{ flex: 1, minWidth: 120 }}
+                disabled={isSuspended}
               />
               <TextField
                 type="number"
@@ -176,6 +217,7 @@ export default function PostInternshipPage() {
                 onChange={(e) => setForm({ ...form, durationWeeks: +e.target.value })}
                 margin="normal"
                 sx={{ width: 100 }}
+                disabled={isSuspended}
               />
               <TextField
                 type="number"
@@ -184,6 +226,7 @@ export default function PostInternshipPage() {
                 onChange={(e) => setForm({ ...form, openings: +e.target.value })}
                 margin="normal"
                 sx={{ width: 100 }}
+                disabled={isSuspended}
               />
             </Box>
             <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
@@ -199,11 +242,15 @@ export default function PostInternshipPage() {
                 variant="outlined"
                 color="inherit"
                 onClick={(e) => handleSubmit(e, false)}
-                disabled={isLoading}
+                disabled={isLoading || isSuspended}
               >
                 Save draft
               </Button>
-              <Button variant="contained" onClick={(e) => handleSubmit(e, true)} disabled={isLoading}>
+              <Button
+                variant="contained"
+                onClick={(e) => handleSubmit(e, true)}
+                disabled={isLoading || isSuspended}
+              >
                 {isLoading ? 'Saving...' : isEdit ? 'Publish changes' : 'Publish listing'}
               </Button>
             </Box>

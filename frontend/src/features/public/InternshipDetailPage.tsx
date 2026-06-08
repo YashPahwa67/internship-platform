@@ -3,6 +3,7 @@ import {
   Container, Typography, Box, Button, CardContent, Chip, Grid, Skeleton, Alert,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import BlockIcon from '@mui/icons-material/Block';
 import { useGetInternshipQuery } from '../../api/internshipApi';
 import { useApplyMutation } from '../../api/applicationApi';
 import { useAppSelector } from '../../app/hooks';
@@ -12,6 +13,7 @@ import PremiumCard from '../../components/ui/PremiumCard';
 import FadeIn from '../../components/ui/FadeIn';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { tokens } from '../../theme/designTokens';
+import { alpha } from '@mui/material/styles';
 
 export default function InternshipDetailPage() {
   const { id } = useParams();
@@ -26,11 +28,16 @@ export default function InternshipDetailPage() {
   const t = tokens[mode];
 
   const job = data?.data;
+  const isSuspended = user?.status === 'suspended';
 
   const handleApply = async () => {
     if (!isAuth) { navigate('/login'); return; }
     if (user?.role !== 'student') {
       setMessage({ type: 'error', text: 'Only students can apply.' });
+      return;
+    }
+    if (isSuspended) {
+      setMessage({ type: 'error', text: 'Your account is suspended. You cannot apply for internships.' });
       return;
     }
     try {
@@ -42,9 +49,14 @@ export default function InternshipDetailPage() {
       const e = err as {
         data?: {
           message?: string;
-          error?: { message?: string; details?: { field: string; message: string }[] };
+          error?: { code?: string; message?: string; details?: { field: string; message: string }[] };
         };
       };
+      const code = e?.data?.error?.code;
+      if (code === 'ACCOUNT_SUSPENDED') {
+        setMessage({ type: 'error', text: 'Your account is suspended. Contact yashpahwa1209@gmail.com for assistance.' });
+        return;
+      }
       const detail = e?.data?.error?.details?.[0]?.message;
       setMessage({
         type: 'error',
@@ -109,6 +121,22 @@ export default function InternshipDetailPage() {
             <PremiumCard hover={false} glass sx={{ position: { md: 'sticky' }, top: 100 }}>
               <CardContent sx={{ p: 3 }}>
                 {message && <Alert severity={message.type} sx={{ mb: 2 }}>{message.text}</Alert>}
+
+                {/* Suspended warning banner */}
+                {isAuth && user?.role === 'student' && isSuspended && (
+                  <Box sx={{
+                    mb: 2, p: 1.5, borderRadius: '10px',
+                    bgcolor: alpha('#f59e0b', 0.08),
+                    border: `1px solid ${alpha('#f59e0b', 0.25)}`,
+                    display: 'flex', gap: 1, alignItems: 'flex-start',
+                  }}>
+                    <BlockIcon sx={{ fontSize: 17, color: '#f59e0b', flexShrink: 0, mt: '1px' }} />
+                    <Typography variant="caption" sx={{ color: '#f59e0b', lineHeight: 1.5 }}>
+                      Account suspended — you cannot apply for internships.
+                    </Typography>
+                  </Box>
+                )}
+
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="caption" color="text.secondary">Stipend</Typography>
                   <Typography fontWeight={600}>
@@ -130,6 +158,7 @@ export default function InternshipDetailPage() {
                       component="textarea"
                       value={coverLetter}
                       onChange={(e) => setCoverLetter(e.target.value)}
+                      disabled={isSuspended}
                       style={{
                         width: '100%',
                         minHeight: 88,
@@ -142,9 +171,15 @@ export default function InternshipDetailPage() {
                         background: 'transparent',
                         color: 'inherit',
                         resize: 'vertical',
+                        opacity: isSuspended ? 0.45 : 1,
+                        cursor: isSuspended ? 'not-allowed' : 'auto',
                       }}
                     />
-                    <Button fullWidth variant="contained" size="large" onClick={handleApply} disabled={applying}>
+                    <Button
+                      fullWidth variant="contained" size="large"
+                      onClick={handleApply}
+                      disabled={applying || isSuspended}
+                    >
                       {applying ? 'Applying...' : 'Apply now'}
                     </Button>
                   </>
