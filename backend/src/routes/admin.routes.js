@@ -16,5 +16,6 @@ router.patch('/users/:id/restore', adminController.restoreUser);
 router.get('/companies/pending', adminController.pendingCompanies);
 router.post('/companies/:id/approve', validate(Joi.object({ approved: Joi.boolean().required() })), adminController.approveCompany);
 router.get('/analytics', adminController.analytics);
+router.get('/audit-log', adminController.getAuditLog);
 
 export default router;

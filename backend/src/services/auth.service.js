@@ -314,6 +314,41 @@ export async function logoutUser(userId) {
   await revokeRefreshToken(userId);
 }
 
+export async function loginWithGoogle(profile) {
+  const email = profile.emails?.[0]?.value;
+  if (!email) throw new ApiError(400, 'OAUTH_EMAIL_MISSING', 'No email returned from Google');
+
+  let user = await User.findOne({ email }).populate('companyId', 'name approvalStatus');
+
+  if (!user) {
+    const firstName = profile.name?.givenName || profile.displayName?.split(' ')[0] || 'User';
+    const lastName = profile.name?.familyName || '';
+    user = await User.create({
+      email,
+      passwordHash: null,
+      role: ROLES.STUDENT,
+      firstName,
+      lastName,
+      emailVerified: true,
+      status: 'active',
+      refreshTokenFamily: (await import('uuid')).v4(),
+    });
+    await Student.create({
+      userId: user._id,
+      fullName: [firstName, lastName].filter(Boolean).join(' ').trim(),
+      skills: [],
+    });
+    user = await User.findById(user._id).populate('companyId', 'name approvalStatus');
+  } else {
+    if (user.status === 'deleted') {
+      throw new ApiError(403, 'ACCOUNT_DELETED', 'Your account has been blocked by admin.');
+    }
+  }
+
+  const tokens = await issueTokens(user);
+  return { user: sanitizeUser(user), ...tokens };
+}
+
 export async function issueTokens(user, family) {
   const accessToken = signAccessToken(user);
   const { token: refreshToken, family: tokenFamily } = signRefreshToken(user, family);

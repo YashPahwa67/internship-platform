@@ -24,5 +24,8 @@ router.patch('/:id/status', authenticate, companyOnly, notSuspended, validate(Jo
   note: Joi.string(),
 })), applicationController.updateStatus);
 router.post('/:id/withdraw', authenticate, studentOnly, applicationController.withdraw);
+router.post('/:id/student-review', authenticate, studentOnly, validate(Joi.object({ rating: Joi.number().min(1).max(5).required(), comment: Joi.string().max(1000).allow('', null) })), applicationController.submitStudentReview);
+router.post('/:id/company-review', authenticate, companyOnly, validate(Joi.object({ rating: Joi.number().min(1).max(5).required(), comment: Joi.string().max(1000).allow('', null) })), applicationController.submitCompanyReview);
+router.get('/:id/certificate', authenticate, studentOnly, applicationController.getCertificate);
 
 export default router;

@@ -4,6 +4,7 @@ import {
   TextField, Button, Box, Chip, Alert, Avatar, Typography, Divider, IconButton, Link,
   Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress,
 } from '@mui/material';
+import ProfileCompleteness from '../../components/ui/ProfileCompleteness';
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -257,6 +258,16 @@ export default function StudentProfilePage() {
       {isSuccess && <Alert severity="success" sx={{ mb: 2 }}>Profile saved.</Alert>}
       {saveError && <Alert severity="error" sx={{ mb: 2 }}>Failed to save profile.</Alert>}
       {uploadMsg && <Alert severity={uploadMsg.type} sx={{ mb: 2 }} onClose={() => setUploadMsg(null)}>{uploadMsg.text}</Alert>}
+
+      {profile && (
+        <FadeIn>
+          <PremiumCard hover={false} sx={{ mb: 3 }}>
+            <Box sx={{ p: { xs: 3, md: 4 } }}>
+              <ProfileCompleteness profile={profile} />
+            </Box>
+          </PremiumCard>
+        </FadeIn>
+      )}
 
       <FadeIn>
         <PremiumCard hover={false} sx={{ mb: 3 }}>

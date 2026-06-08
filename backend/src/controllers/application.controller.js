@@ -1,6 +1,8 @@
+import PDFDocument from 'pdfkit';
 import { Application } from '../models/Application.js';
 import { Student } from '../models/Student.js';
 import { Internship } from '../models/Internship.js';
+import { Company } from '../models/Company.js';
 import { User } from '../models/User.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -145,6 +147,76 @@ export const withdraw = asyncHandler(async (req, res) => {
   application.statusHistory.push({ status: 'withdrawn', by: req.user._id });
   await application.save();
   res.json({ success: true, data: formatApp(application) });
+});
+
+export const submitStudentReview = asyncHandler(async (req, res) => {
+  const student = await Student.findOne({ userId: req.user._id });
+  const app = await Application.findOne({ _id: req.params.id, studentId: student?._id, status: 'completed' });
+  if (!app) throw new ApiError(404, 'NOT_FOUND', 'Completed application not found');
+  if (app.studentReview?.submittedAt) throw new ApiError(400, 'ALREADY_REVIEWED', 'Review already submitted');
+
+  const { rating, comment } = req.body;
+  if (!rating || rating < 1 || rating > 5) throw new ApiError(400, 'VALIDATION_ERROR', 'Rating must be 1–5');
+
+  app.studentReview = { rating, comment, submittedAt: new Date() };
+  await app.save();
+  res.json({ success: true, data: { rating, comment } });
+});
+
+export const submitCompanyReview = asyncHandler(async (req, res) => {
+  const app = await Application.findOne({ _id: req.params.id, companyId: req.user.companyId, status: 'completed' });
+  if (!app) throw new ApiError(404, 'NOT_FOUND', 'Completed application not found');
+  if (app.companyReview?.submittedAt) throw new ApiError(400, 'ALREADY_REVIEWED', 'Review already submitted');
+
+  const { rating, comment } = req.body;
+  if (!rating || rating < 1 || rating > 5) throw new ApiError(400, 'VALIDATION_ERROR', 'Rating must be 1–5');
+
+  app.companyReview = { rating, comment, submittedAt: new Date() };
+  await app.save();
+  res.json({ success: true, data: { rating, comment } });
+});
+
+export const getCertificate = asyncHandler(async (req, res) => {
+  const student = await Student.findOne({ userId: req.user._id });
+  const app = await Application.findOne({ _id: req.params.id, studentId: student?._id, status: 'completed' })
+    .populate('internshipId', 'title type duration')
+    .lean();
+  if (!app) throw new ApiError(404, 'NOT_FOUND', 'Completed application not found');
+
+  const company = await Company.findById(app.companyId).lean();
+  const studentUser = await User.findById(req.user._id).lean();
+  const studentName = student?.fullName || `${studentUser?.firstName || ''} ${studentUser?.lastName || ''}`.trim();
+
+  const doc = new PDFDocument({ size: 'A4', margin: 60 });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="certificate-${app._id}.pdf"`);
+  doc.pipe(res);
+
+  doc.font('Helvetica-Bold').fontSize(28).text('Certificate of Completion', { align: 'center' });
+  doc.moveDown(0.5);
+  doc.font('Helvetica').fontSize(14).fillColor('#555')
+    .text('This certifies that', { align: 'center' });
+  doc.moveDown(0.4);
+  doc.font('Helvetica-Bold').fontSize(22).fillColor('#111')
+    .text(studentName, { align: 'center' });
+  doc.moveDown(0.4);
+  doc.font('Helvetica').fontSize(14).fillColor('#555')
+    .text('has successfully completed the internship', { align: 'center' });
+  doc.moveDown(0.4);
+  doc.font('Helvetica-Bold').fontSize(18).fillColor('#111')
+    .text(app.internshipId?.title || 'Internship Program', { align: 'center' });
+  doc.moveDown(0.4);
+  doc.font('Helvetica').fontSize(14).fillColor('#555')
+    .text(`at ${company?.name || 'the company'}`, { align: 'center' });
+  doc.moveDown(1.5);
+  const completedDate = app.statusHistory?.findLast?.(h => h.status === 'completed')?.at || new Date();
+  doc.font('Helvetica').fontSize(12).fillColor('#777')
+    .text(`Completed: ${new Date(completedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, { align: 'center' });
+  doc.moveDown(0.3);
+  doc.font('Helvetica').fontSize(11).fillColor('#aaa')
+    .text(`Certificate ID: ${app._id}`, { align: 'center' });
+
+  doc.end();
 });
 
 function formatApp(a, internship, options = {}) {

@@ -31,6 +31,9 @@ import AdminCompaniesPage from './features/admin/AdminCompaniesPage';
 
 import MentorDashboard from './features/mentor/MentorDashboard';
 import NotificationsPage from './features/shared/NotificationsPage';
+import AdminAuditPage from './features/admin/AdminAuditPage';
+import StudentMentorshipPage from './features/student/StudentMentorshipPage';
+import OAuthCallbackPage from './features/auth/OAuthCallbackPage';
 
 export default function App() {
   return (
@@ -45,6 +48,7 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/verify-otp" element={<VerifyOtpPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/auth/google/callback" element={<OAuthCallbackPage />} />
       </Route>
 
       <Route element={<ProtectedRoute />}>
@@ -60,6 +64,7 @@ export default function App() {
             <Route path="applications" element={<StudentApplicationsPage />} />
             <Route path="tasks" element={<StudentTasksPage />} />
             <Route path="profile" element={<StudentProfilePage />} />
+            <Route path="mentorship" element={<StudentMentorshipPage />} />
           </Route>
         </Route>
 
@@ -79,6 +84,7 @@ export default function App() {
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="moderation" element={<AdminModerationPage />} />
             <Route path="companies" element={<AdminCompaniesPage />} />
+            <Route path="audit-log" element={<AdminAuditPage />} />
           </Route>
         </Route>
 
@@ -86,6 +92,7 @@ export default function App() {
           <Route path="/mentor" element={<DashboardLayout />}>
             <Route path="dashboard" element={<MentorDashboard />} />
             <Route path="tasks" element={<StudentTasksPage />} />
+            <Route path="mentorship" element={<StudentMentorshipPage />} />
           </Route>
         </Route>
       </Route>

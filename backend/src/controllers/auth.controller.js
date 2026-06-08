@@ -108,3 +108,10 @@ export const deleteAccount = asyncHandler(async (req, res) => {
   res.clearCookie('refresh_token', { path: '/api/v1/auth/refresh-token' });
   res.json({ success: true, data: { message: 'Account deleted' } });
 });
+
+export const googleCallback = asyncHandler(async (req, res) => {
+  const result = await authService.loginWithGoogle(req.user);
+  res.cookie('refresh_token', result.refreshToken, { ...cookieOptions, path: '/api/v1/auth/refresh-token' });
+  const encoded = encodeURIComponent(result.accessToken);
+  res.redirect(`${config.clientUrl}/auth/google/callback#at=${encoded}`);
+});

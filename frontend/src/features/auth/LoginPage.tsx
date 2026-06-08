@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { TextField, Button, Alert, Box, Link, Typography } from '@mui/material';
+import { TextField, Button, Alert, Box, Link, Typography, Divider } from '@mui/material';
 import { useLoginMutation } from '../../api/authApi';
 import { useAppDispatch } from '../../app/hooks';
 import { setCredentials } from './authSlice';
 import AuthCard from '../../components/ui/AuthCard';
+
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
 const roleRedirect: Record<string, string> = {
   admin: '/admin/dashboard',
@@ -81,6 +83,25 @@ export default function LoginPage() {
           {isLoading ? 'Signing in...' : 'Sign in'}
         </Button>
       </Box>
+      <Divider sx={{ my: 2 }}>
+        <Typography variant="caption" color="text.disabled">or</Typography>
+      </Divider>
+      <Button
+        fullWidth
+        variant="outlined"
+        color="inherit"
+        size="large"
+        onClick={() => { window.location.href = `${API_BASE}/auth/google`; }}
+        sx={{ gap: 1.5, fontWeight: 500 }}
+      >
+        <Box
+          component="img"
+          src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+          alt="Google"
+          sx={{ width: 18, height: 18 }}
+        />
+        Continue with Google
+      </Button>
       <Typography variant="body2" sx={{ mt: 3, textAlign: 'center' }} color="text.secondary">
         Don&apos;t have an account?{' '}
         <Link component={RouterLink} to="/register" color="text.primary" fontWeight={600}>

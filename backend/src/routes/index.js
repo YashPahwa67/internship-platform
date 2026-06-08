@@ -6,6 +6,7 @@ import taskRoutes from './task.routes.js';
 import notificationRoutes from './notification.routes.js';
 import adminRoutes from './admin.routes.js';
 import studentRoutes from './student.routes.js';
+import mentorshipRoutes from './mentorship.routes.js';
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use('/tasks', taskRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/admin', adminRoutes);
 router.use('/students', studentRoutes);
+router.use('/mentorships', mentorshipRoutes);
 
 export default router;

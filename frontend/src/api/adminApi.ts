@@ -32,6 +32,11 @@ export const adminApi = baseApi.injectEndpoints({
       query: ({ id, approved }) => ({ url: `/admin/companies/${id}/approve`, method: 'POST', body: { approved } }),
       invalidatesTags: ['Admin'],
     }),
+    getAuditLog: builder.query({
+      query: (params) => ({ url: '/admin/audit-log', params }),
+      providesTags: ['Admin'],
+      keepUnusedDataFor: 0,
+    }),
   }),
 });
 
@@ -43,4 +48,5 @@ export const {
   useRestoreUserMutation,
   useGetPendingCompaniesQuery,
   useApproveCompanyMutation,
+  useGetAuditLogQuery,
 } = adminApi;

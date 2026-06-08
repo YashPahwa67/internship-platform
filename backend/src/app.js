@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import passport from 'passport';
 import compression from 'compression';
 import mongoSanitize from 'express-mongo-sanitize';
 import xss from 'xss-clean';
@@ -15,6 +16,7 @@ import { globalLimiter } from './middleware/rateLimiter.js';
 import { pingRedis } from './config/redis.js';
 import { getDbHealth } from './config/database.js';
 import logger from './utils/logger.js';
+import './config/passport.js';
 
 export function createApp() {
   const app = express();
@@ -46,6 +48,7 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true, limit: '256kb' }));
   app.use(compression());
   app.use(cookieParser());
+  app.use(passport.initialize());
 
   app.use(
     morgan((tokens, req, res) =>

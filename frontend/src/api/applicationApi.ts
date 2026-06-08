@@ -23,6 +23,14 @@ export const applicationApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/applications/${id}/withdraw`, method: 'POST' }),
       invalidatesTags: ['Applications'],
     }),
+    submitStudentReview: builder.mutation({
+      query: ({ id, ...body }) => ({ url: `/applications/${id}/student-review`, method: 'POST', body }),
+      invalidatesTags: ['Applications'],
+    }),
+    submitCompanyReview: builder.mutation({
+      query: ({ id, ...body }) => ({ url: `/applications/${id}/company-review`, method: 'POST', body }),
+      invalidatesTags: ['Applications'],
+    }),
   }),
 });
 
@@ -32,4 +40,6 @@ export const {
   useApplyMutation,
   useUpdateApplicationStatusMutation,
   useWithdrawApplicationMutation,
+  useSubmitStudentReviewMutation,
+  useSubmitCompanyReviewMutation,
 } = applicationApi;

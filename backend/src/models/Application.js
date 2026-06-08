@@ -15,6 +15,16 @@ const applicationSchema = new mongoose.Schema(
       uploadedAt: Date,
     },
     mentorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    studentReview: {
+      rating: { type: Number, min: 1, max: 5 },
+      comment: { type: String, maxlength: 1000 },
+      submittedAt: Date,
+    },
+    companyReview: {
+      rating: { type: Number, min: 1, max: 5 },
+      comment: { type: String, maxlength: 1000 },
+      submittedAt: Date,
+    },
     statusHistory: [
       {
         status: String,

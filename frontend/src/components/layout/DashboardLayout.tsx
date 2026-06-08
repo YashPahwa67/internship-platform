@@ -12,6 +12,8 @@ import WorkOutlineIcon from '@mui/icons-material/WorkOutline';
 import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import TaskAltOutlinedIcon from '@mui/icons-material/TaskAltOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutline';
 import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
@@ -42,6 +44,7 @@ function getNavItems(role: string): NavItem[] {
         { label: 'Users', path: '/admin/users', icon: <PeopleOutlineIcon fontSize="small" /> },
         { label: 'Moderation', path: '/admin/moderation', icon: <WorkOutlineIcon fontSize="small" /> },
         { label: 'Companies', path: '/admin/companies', icon: <AssignmentOutlinedIcon fontSize="small" /> },
+        { label: 'Audit log', path: '/admin/audit-log', icon: <HistoryOutlinedIcon fontSize="small" /> },
       ];
     case 'company_hr':
       return [
@@ -54,6 +57,7 @@ function getNavItems(role: string): NavItem[] {
       return [
         { label: 'Dashboard', path: '/mentor/dashboard', icon: <DashboardOutlinedIcon fontSize="small" /> },
         { label: 'Tasks', path: '/mentor/tasks', icon: <TaskAltOutlinedIcon fontSize="small" /> },
+        { label: 'Mentorship', path: '/mentor/mentorship', icon: <GroupsOutlinedIcon fontSize="small" /> },
       ];
     default:
       return [
@@ -61,6 +65,7 @@ function getNavItems(role: string): NavItem[] {
         { label: 'Internships', path: '/student/internships', icon: <WorkOutlineIcon fontSize="small" /> },
         { label: 'Applications', path: '/student/applications', icon: <AssignmentOutlinedIcon fontSize="small" /> },
         { label: 'Tasks', path: '/student/tasks', icon: <TaskAltOutlinedIcon fontSize="small" /> },
+        { label: 'Mentorship', path: '/student/mentorship', icon: <GroupsOutlinedIcon fontSize="small" /> },
         { label: 'Profile', path: '/student/profile', icon: <PersonOutlineIcon fontSize="small" /> },
       ];
   }

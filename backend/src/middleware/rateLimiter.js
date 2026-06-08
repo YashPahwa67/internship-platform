@@ -47,6 +47,20 @@ export const loginLimiter = rateLimit({
   },
 });
 
+export const otpLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  store: redisStore('rl:otp:'),
+  keyGenerator: (req) => `otp:${req.ip}:${(req.body?.email || 'unknown').toLowerCase()}`,
+  handler: (_req, res) => {
+    res.status(429).json({
+      success: false,
+      error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many OTP attempts. Try again in 10 minutes.' },
+    });
+  },
+});
+
 export const applyLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
   max: 10,
