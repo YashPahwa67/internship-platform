@@ -42,6 +42,8 @@ type FormState = {
   portfolio: string;
   location: string;
   graduationYear: string;
+  rollNo: string;
+  cgpa: string;
   skills: string[];
   skillInput: string;
 };
@@ -84,6 +86,7 @@ export default function StudentProfilePage() {
   const [form, setForm] = useState<FormState>({
     fullName: '', phone: '', college: '', degree: '', bio: '',
     linkedIn: '', github: '', portfolio: '', location: '', graduationYear: '',
+    rollNo: '', cgpa: '',
     skills: [], skillInput: '',
   });
   const [uploadMsg, setUploadMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -101,6 +104,8 @@ export default function StudentProfilePage() {
         portfolio: profile.portfolio || '',
         location: profile.location || '',
         graduationYear: profile.graduationYear?.toString() || '',
+        rollNo: profile.rollNo || '',
+        cgpa: profile.cgpa != null ? String(profile.cgpa) : '',
         skills: profile.skills || [],
         skillInput: '',
       });
@@ -109,11 +114,13 @@ export default function StudentProfilePage() {
   }, [profile, dispatch]);
 
   const handleSave = async () => {
-    const { skillInput, graduationYear, ...rest } = form;
+    const { skillInput, graduationYear, cgpa, rollNo, ...rest } = form;
     try {
       const res = await update({
         ...rest,
         graduationYear: graduationYear ? parseInt(graduationYear, 10) : undefined,
+        rollNo: rollNo.trim() || undefined,
+        cgpa: cgpa.trim() ? parseFloat(cgpa) : undefined,
       }).unwrap();
       syncProfileToAuth(dispatch, res.data);
       setUploadMsg({ type: 'success', text: 'Profile saved.' });
@@ -313,7 +320,7 @@ export default function StudentProfilePage() {
                   {uploadingResume ? 'Uploading...' : profile?.resume ? 'Replace resume' : 'Upload resume'}
                 </Button>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                  PDF or DOC, max 5MB — stored on Cloudinary
+                  PDF or DOC, max 5MB
                 </Typography>
               </Box>
             </Box>
@@ -328,6 +335,10 @@ export default function StudentProfilePage() {
             <TextField fullWidth label="College" value={form.college} onChange={(e) => setForm({ ...form, college: e.target.value })} margin="normal" />
             <TextField fullWidth label="Degree" value={form.degree} onChange={(e) => setForm({ ...form, degree: e.target.value })} margin="normal" />
             <TextField fullWidth label="Graduation year" type="number" value={form.graduationYear} onChange={(e) => setForm({ ...form, graduationYear: e.target.value })} margin="normal" />
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField fullWidth label="Roll No" value={form.rollNo} onChange={(e) => setForm({ ...form, rollNo: e.target.value })} margin="normal" />
+              <TextField fullWidth label="CGPA" type="number" inputProps={{ step: 0.01, min: 0, max: 10 }} value={form.cgpa} onChange={(e) => setForm({ ...form, cgpa: e.target.value })} margin="normal" />
+            </Box>
             <TextField fullWidth label="Location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} margin="normal" />
 
             <Divider sx={{ my: 3 }} />

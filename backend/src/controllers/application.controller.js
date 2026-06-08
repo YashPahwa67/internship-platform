@@ -45,12 +45,17 @@ export const apply = asyncHandler(async (req, res) => {
 
   let formResponses;
   try {
-    formResponses = req.body.formResponses
-      ? JSON.parse(req.body.formResponses)
-      : undefined;
+    formResponses = req.body.formResponses ? JSON.parse(req.body.formResponses) : undefined;
   } catch {
     formResponses = undefined;
   }
+
+  const applicantFields = {
+    name: req.body.applicantName || undefined,
+    university: req.body.applicantUniversity || undefined,
+    rollNo: req.body.applicantRollNo || undefined,
+    cgpa: req.body.applicantCgpa !== undefined && req.body.applicantCgpa !== '' ? parseFloat(req.body.applicantCgpa) : undefined,
+  };
 
   const { application, internship } = await applyForInternship({
     userId: req.user._id,
@@ -59,6 +64,7 @@ export const apply = asyncHandler(async (req, res) => {
     coverLetter: req.body.coverLetter,
     resumeOverride,
     formResponses,
+    applicantFields,
   });
   res.status(201).json({ success: true, data: formatApp(application, internship) });
 });
@@ -250,6 +256,47 @@ export const getCertificate = asyncHandler(async (req, res) => {
   doc.end();
 });
 
+export const exportCsv = asyncHandler(async (req, res) => {
+  const filter = { companyId: req.user.companyId };
+  if (req.query.internshipId) filter.internshipId = req.query.internshipId;
+  if (req.query.status) filter.status = req.query.status;
+
+  const apps = await Application.find(filter)
+    .populate('internshipId', 'title')
+    .populate({ path: 'studentId', populate: { path: 'userId', select: 'email firstName lastName' } })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const esc = (v) => {
+    if (v == null) return '';
+    const s = String(v).replace(/"/g, '""');
+    return /[,"\n]/.test(s) ? `"${s}"` : s;
+  };
+
+  const header = ['Name', 'Email', 'University', 'Roll No', 'CGPA', 'Skills', 'Internship', 'Status', 'Applied At', 'Resume URL'];
+  const rows = apps.map((a) => {
+    const snap = a.applicantSnapshot || {};
+    const student = a.studentId;
+    const user = student?.userId;
+    const name = snap.name || student?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || '';
+    const email = snap.email || user?.email || '';
+    const skills = (student?.skills || []).join('; ');
+    return [
+      esc(name), esc(email), esc(snap.university || student?.college || ''),
+      esc(snap.rollNo || ''), esc(snap.cgpa ?? ''),
+      esc(skills), esc(a.internshipId?.title || ''),
+      esc(a.status), esc(a.appliedAt ? new Date(a.appliedAt).toISOString().split('T')[0] : ''),
+      esc(a.resumeSnapshot?.url || ''),
+    ].join(',');
+  });
+
+  const csv = [header.join(','), ...rows].join('\n');
+  const filename = `applications-${req.query.status || 'all'}-${Date.now()}.csv`;
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(csv);
+});
+
 function formatApp(a, internship, options = {}) {
   const { fullProfile = false } = options;
   const student = a.studentId;
@@ -270,6 +317,7 @@ function formatApp(a, internship, options = {}) {
     status: a.status,
     coverLetter: a.coverLetter,
     appliedAt: a.appliedAt,
+    applicantSnapshot: a.applicantSnapshot,
     resumeAtApplication: formatResumeAsset(a.resumeSnapshot),
     formResponses: a.formResponses || [],
     internship: internship

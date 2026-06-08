@@ -2,15 +2,20 @@ import { useState } from 'react';
 import {
   Typography, CardContent, Box, Button, Dialog, DialogTitle,
   DialogContent, DialogActions, TextField, Chip, alpha,
+  MenuItem, Select, InputLabel, FormControl,
 } from '@mui/material';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDroppable, useDraggable, type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core';
 import { useGetApplicationsQuery, useUpdateApplicationStatusMutation } from '../../api/applicationApi';
+import { useGetCompanyInternshipsQuery } from '../../api/internshipApi';
 import { useCreateTaskMutation } from '../../api/taskApi';
+import { useAppSelector } from '../../app/hooks';
+import { selectAccessToken } from '../../features/auth/authSlice';
 import PageHeader from '../../components/ui/PageHeader';
 import PremiumCard from '../../components/ui/PremiumCard';
 import CandidateProfileView, { type CandidateProfile } from '../../components/company/CandidateProfileView';
@@ -177,8 +182,10 @@ export default function CandidatesPage() {
   const { data, refetch, isFetching } = useGetApplicationsQuery({}, {
     refetchOnMountOrArgChange: true, refetchOnFocus: true, refetchOnReconnect: true,
   });
+  const { data: internshipsData } = useGetCompanyInternshipsQuery(undefined);
   const [updateStatus] = useUpdateApplicationStatusMutation();
   const [createTask] = useCreateTaskMutation();
+  const accessToken = useAppSelector(selectAccessToken);
   const { mode } = useThemeMode();
   const t = tokens[mode];
 
@@ -186,6 +193,38 @@ export default function CandidatesPage() {
   const [taskDialog, setTaskDialog] = useState<{ applicationId: string; name: string } | null>(null);
   const [taskForm, setTaskForm] = useState({ title: '', description: '', deadline: '' });
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [exportDialog, setExportDialog] = useState(false);
+  const [exportStatus, setExportStatus] = useState('');
+  const [exportInternshipId, setExportInternshipId] = useState('');
+  const [exporting, setExporting] = useState(false);
+
+  const internships = (internshipsData?.data || []) as { id: string; title: string }[];
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (exportStatus) params.set('status', exportStatus);
+      if (exportInternshipId) params.set('internshipId', exportInternshipId);
+      const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
+      const res = await fetch(`${API_BASE}/applications/export?${params}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `candidates-${exportStatus || 'all'}-${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportDialog(false);
+    } catch {
+      /* silent */
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const applications = (data?.data || []) as ApplicationRow[];
   const byColumn = Object.fromEntries(COLUMNS.map((c) => [c.id, applications.filter((a) => a.status === c.id)]));
@@ -231,9 +270,20 @@ export default function CandidatesPage() {
         title="Candidates"
         subtitle="Drag cards between columns to move candidates through the pipeline."
         action={
-          <Button size="small" variant="outlined" color="inherit" onClick={() => refetch()} disabled={isFetching}>
-            {isFetching ? 'Refreshing…' : 'Refresh'}
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button size="small" variant="outlined" color="inherit" onClick={() => refetch()} disabled={isFetching}>
+              {isFetching ? 'Refreshing…' : 'Refresh'}
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              color="inherit"
+              startIcon={<FileDownloadOutlinedIcon />}
+              onClick={() => setExportDialog(true)}
+            >
+              Export CSV
+            </Button>
+          </Box>
         }
       />
 
@@ -298,6 +348,53 @@ export default function CandidatesPage() {
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setTaskDialog(null)} color="inherit">Cancel</Button>
           <Button variant="contained" onClick={handleCreateTask} disabled={!taskForm.title}>Create</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* CSV export dialog */}
+      <Dialog open={exportDialog} onClose={() => setExportDialog(false)} PaperProps={{ sx: { borderRadius: 3, border: `1px solid ${t.border}` } }}>
+        <DialogTitle fontWeight={600}>Export candidates as CSV</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Columns: Name, Email, University, Roll No, CGPA, Skills, Internship, Status, Applied At, Resume URL
+          </Typography>
+          <FormControl fullWidth margin="normal" size="small">
+            <InputLabel>Status (all if blank)</InputLabel>
+            <Select
+              value={exportStatus}
+              label="Status (all if blank)"
+              onChange={(e) => setExportStatus(e.target.value)}
+            >
+              <MenuItem value="">All statuses</MenuItem>
+              {['applied', 'shortlisted', 'interview_scheduled', 'offered', 'accepted', 'active', 'completed', 'rejected', 'withdrawn'].map((s) => (
+                <MenuItem key={s} value={s}>{s}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth margin="normal" size="small">
+            <InputLabel>Internship (all if blank)</InputLabel>
+            <Select
+              value={exportInternshipId}
+              label="Internship (all if blank)"
+              onChange={(e) => setExportInternshipId(e.target.value)}
+            >
+              <MenuItem value="">All internships</MenuItem>
+              {internships.map((i) => (
+                <MenuItem key={i.id} value={i.id}>{i.title}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setExportDialog(false)} color="inherit">Cancel</Button>
+          <Button
+            variant="contained"
+            startIcon={<FileDownloadOutlinedIcon />}
+            onClick={handleExport}
+            disabled={exporting}
+          >
+            {exporting ? 'Exporting…' : 'Download CSV'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

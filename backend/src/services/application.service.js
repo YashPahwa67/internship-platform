@@ -9,7 +9,7 @@ import { notifyUser } from './notification.service.js';
 import { enqueueEmail } from '../jobs/emailQueue.js';
 import logger from '../utils/logger.js';
 
-export async function applyForInternship({ userId, firstName, internshipId, coverLetter, resumeOverride, formResponses }) {
+export async function applyForInternship({ userId, firstName, internshipId, coverLetter, resumeOverride, formResponses, applicantFields = {} }) {
   if (!mongoose.Types.ObjectId.isValid(internshipId)) {
     throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid internship id');
   }
@@ -20,8 +20,21 @@ export async function applyForInternship({ userId, firstName, internshipId, cove
   try {
     session.startTransaction();
 
-    const student = await Student.findOne({ userId }).session(session);
+    const student = await Student.findOne({ userId }).session(session)
+      .populate('userId', 'email firstName lastName');
     if (!student) throw new ApiError(400, 'VALIDATION_ERROR', 'Student profile not found');
+
+    if (applicantFields.rollNo !== undefined && student.rollNo !== applicantFields.rollNo) {
+      student.rollNo = applicantFields.rollNo;
+    }
+    if (applicantFields.cgpa !== undefined && student.cgpa !== applicantFields.cgpa) {
+      student.cgpa = applicantFields.cgpa;
+    }
+    if (applicantFields.university !== undefined) {
+      student.college = applicantFields.university;
+    }
+    const needsSave = applicantFields.rollNo !== undefined || applicantFields.cgpa !== undefined || applicantFields.university !== undefined;
+    if (needsSave) await student.save({ session });
 
     const existing = await Application.findOne({
       studentId: student._id,
@@ -60,6 +73,13 @@ export async function applyForInternship({ userId, firstName, internshipId, cove
           internshipId: internship._id,
           companyId: internship.companyId,
           userId,
+          applicantSnapshot: {
+            name: applicantFields.name || student.fullName || [student.userId?.firstName, student.userId?.lastName].filter(Boolean).join(' ') || undefined,
+            email: student.userId?.email,
+            university: applicantFields.university || student.college || student.university,
+            rollNo: applicantFields.rollNo || student.rollNo,
+            cgpa: applicantFields.cgpa !== undefined ? applicantFields.cgpa : student.cgpa,
+          },
           coverLetter,
           resumeSnapshot: resumeOverride || (student.resume
             ? {

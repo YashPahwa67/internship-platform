@@ -48,6 +48,8 @@ export function formatStudentProfile(student) {
     graduationYear: student.graduationYear,
     location: student.location,
     bio: student.bio,
+    rollNo: student.rollNo,
+    cgpa: student.cgpa,
     skills: student.skills || [],
     linkedIn: student.linkedIn,
     github: student.github,

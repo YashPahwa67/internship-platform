@@ -7,12 +7,14 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import BlockIcon from '@mui/icons-material/Block';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
+import WorkOutlineIcon from '@mui/icons-material/WorkOutline';
 import { Helmet } from 'react-helmet-async';
 import { useGetInternshipQuery } from '../../api/internshipApi';
 import { useApplyMutation } from '../../api/applicationApi';
+import { useGetProfileQuery } from '../../api/studentApi';
 import { useAppSelector } from '../../app/hooks';
 import { selectIsAuthenticated, selectUser } from '../../features/auth/authSlice';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import PremiumCard from '../../components/ui/PremiumCard';
 import FadeIn from '../../components/ui/FadeIn';
 import { useThemeMode } from '../../theme/ThemeProvider';
@@ -34,10 +36,30 @@ export default function InternshipDetailPage() {
   const [apply, { isLoading: applying }] = useApplyMutation();
   const isAuth = useAppSelector(selectIsAuthenticated);
   const user = useAppSelector(selectUser);
+  const isStudent = isAuth && user?.role === 'student';
+
+  const { data: profileData } = useGetProfileQuery(undefined, { skip: !isStudent });
+  const profile = profileData?.data;
+
   const [coverLetter, setCoverLetter] = useState('');
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const resumeRef = useRef<HTMLInputElement>(null);
   const [formAnswers, setFormAnswers] = useState<Record<string, string>>({});
+
+  const [applicantName, setApplicantName] = useState('');
+  const [applicantUniversity, setApplicantUniversity] = useState('');
+  const [applicantRollNo, setApplicantRollNo] = useState('');
+  const [applicantCgpa, setApplicantCgpa] = useState('');
+
+  useEffect(() => {
+    if (!profile) return;
+    const name = profile.fullName || [profile.user?.firstName, profile.user?.lastName].filter(Boolean).join(' ');
+    if (name) setApplicantName(name);
+    if (profile.college) setApplicantUniversity(profile.college);
+    if (profile.rollNo) setApplicantRollNo(profile.rollNo);
+    if (profile.cgpa != null) setApplicantCgpa(String(profile.cgpa));
+  }, [profile]);
+
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const { mode } = useThemeMode();
   const t = tokens[mode];
@@ -62,12 +84,18 @@ export default function InternshipDetailPage() {
       setMessage({ type: 'error', text: 'Your account is suspended. You cannot apply for internships.' });
       return;
     }
-
+    if (!applicantName.trim()) {
+      setMessage({ type: 'error', text: 'Name is required.' });
+      return;
+    }
+    if (!applicantUniversity.trim()) {
+      setMessage({ type: 'error', text: 'University is required.' });
+      return;
+    }
     if (job?.requireResume && !resumeFile) {
       setMessage({ type: 'error', text: 'A resume is required for this internship. Please attach your resume.' });
       return;
     }
-
     for (const q of applicationForm) {
       if (q.required && !formAnswers[q.id]?.trim()) {
         setMessage({ type: 'error', text: `"${q.question}" is required.` });
@@ -80,7 +108,10 @@ export default function InternshipDetailPage() {
       fd.append('internshipId', id!);
       if (coverLetter.trim()) fd.append('coverLetter', coverLetter.trim());
       if (resumeFile) fd.append('resume', resumeFile);
-
+      fd.append('applicantName', applicantName.trim());
+      fd.append('applicantUniversity', applicantUniversity.trim());
+      if (applicantRollNo.trim()) fd.append('applicantRollNo', applicantRollNo.trim());
+      if (applicantCgpa.trim()) fd.append('applicantCgpa', applicantCgpa.trim());
       if (applicationForm.length > 0) {
         const responses = applicationForm.map((q) => ({
           questionId: q.id,
@@ -89,7 +120,6 @@ export default function InternshipDetailPage() {
         }));
         fd.append('formResponses', JSON.stringify(responses));
       }
-
       await apply(fd as Parameters<typeof apply>[0]).unwrap();
       setMessage({ type: 'success', text: 'Application submitted successfully.' });
     } catch (err: unknown) {
@@ -209,9 +239,57 @@ export default function InternshipDetailPage() {
                   <Typography fontWeight={500}>{job.openings}</Typography>
                 </Box>
 
-                {isAuth && user?.role === 'student' ? (
+                {isStudent ? (
                   <>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>Cover letter (optional)</Typography>
+                    {/* Internship role display */}
+                    <Box sx={{
+                      mb: 2, p: 1.5, borderRadius: '8px',
+                      bgcolor: alpha(t.border, 0.4),
+                      display: 'flex', alignItems: 'center', gap: 1,
+                    }}>
+                      <WorkOutlineIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
+                          Applying for
+                        </Typography>
+                        <Typography variant="body2" fontWeight={600}>{job.title}</Typography>
+                      </Box>
+                    </Box>
+
+                    <Divider sx={{ mb: 2 }} />
+                    <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5 }}>
+                      Your details
+                    </Typography>
+
+                    <TextField
+                      fullWidth size="small" label="Full name *" value={applicantName}
+                      onChange={(e) => setApplicantName(e.target.value)}
+                      disabled={isSuspended} sx={{ mb: 1.5 }}
+                    />
+                    <TextField
+                      fullWidth size="small" label="University *" value={applicantUniversity}
+                      onChange={(e) => setApplicantUniversity(e.target.value)}
+                      disabled={isSuspended} sx={{ mb: 1.5 }}
+                    />
+                    <Box sx={{ display: 'flex', gap: 1.5, mb: 1.5 }}>
+                      <TextField
+                        fullWidth size="small" label="Roll No"
+                        value={applicantRollNo}
+                        onChange={(e) => setApplicantRollNo(e.target.value)}
+                        disabled={isSuspended}
+                      />
+                      <TextField
+                        fullWidth size="small" label="CGPA" type="number"
+                        inputProps={{ step: 0.01, min: 0, max: 10 }}
+                        value={applicantCgpa}
+                        onChange={(e) => setApplicantCgpa(e.target.value)}
+                        disabled={isSuspended}
+                      />
+                    </Box>
+
+                    <Divider sx={{ mb: 2 }} />
+
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Cover letter (optional)</Typography>
                     <Box
                       component="textarea"
                       value={coverLetter}
@@ -219,7 +297,7 @@ export default function InternshipDetailPage() {
                       disabled={isSuspended}
                       style={{
                         width: '100%',
-                        minHeight: 88,
+                        minHeight: 80,
                         marginBottom: 12,
                         padding: 12,
                         borderRadius: 10,
@@ -284,7 +362,6 @@ export default function InternshipDetailPage() {
                             />
                           ))}
                         </Box>
-                        <Divider sx={{ my: 2 }} />
                       </>
                     )}
 
@@ -292,7 +369,7 @@ export default function InternshipDetailPage() {
                       fullWidth variant="contained" size="large"
                       onClick={handleApply}
                       disabled={applying || isSuspended}
-                      sx={{ mt: applicationForm.length > 0 ? 0 : 1.5 }}
+                      sx={{ mt: 2 }}
                     >
                       {applying ? 'Applying...' : 'Apply now'}
                     </Button>

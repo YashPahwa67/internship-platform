@@ -34,6 +34,8 @@ export interface StudentProfile {
   projects?: Array<Record<string, unknown>>;
   experience?: Array<Record<string, unknown>>;
   certifications?: Array<Record<string, unknown>>;
+  rollNo?: string;
+  cgpa?: number;
   graduationYear?: number;
 }
 

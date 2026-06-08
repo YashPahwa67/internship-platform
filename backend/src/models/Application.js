@@ -14,6 +14,13 @@ const applicationSchema = new mongoose.Schema(
       filename: String,
       uploadedAt: Date,
     },
+    applicantSnapshot: {
+      name: String,
+      email: String,
+      university: String,
+      rollNo: String,
+      cgpa: Number,
+    },
     mentorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     formResponses: [
       {

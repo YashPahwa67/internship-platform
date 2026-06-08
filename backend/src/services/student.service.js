@@ -9,7 +9,7 @@ const PROFILE_FIELDS = [
   'fullName', 'phone', 'college', 'degree', 'skills', 'bio',
   'linkedIn', 'github', 'portfolio', 'location',
   'education', 'projects', 'experience', 'certifications',
-  'university', 'graduationYear',
+  'university', 'graduationYear', 'rollNo', 'cgpa',
 ];
 
 function sanitizeProfilePayload(body) {
@@ -65,6 +65,8 @@ function formatProfile(doc) {
     projects: p.projects || [],
     experience: p.experience || [],
     certifications: p.certifications || [],
+    rollNo: p.rollNo,
+    cgpa: p.cgpa,
     graduationYear: p.graduationYear,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,

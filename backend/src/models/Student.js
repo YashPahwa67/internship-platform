@@ -36,6 +36,8 @@ const studentSchema = new mongoose.Schema(
     projects: { type: [projectSchema], default: [] },
     experience: { type: [experienceSchema], default: [] },
     certifications: { type: [certificationSchema], default: [] },
+    rollNo: { type: String, trim: true, maxlength: 50 },
+    cgpa: { type: Number, min: 0, max: 10 },
     /** @deprecated use college — kept for backward compatibility */
     university: { type: String, trim: true },
     graduationYear: { type: Number, min: 1990, max: 2040 },

@@ -26,6 +26,7 @@ function optionalResume(req, res, next) {
   });
 }
 
+router.get('/export', authenticate, companyOnly, applicationController.exportCsv);
 router.get('/', authenticate, applicationController.list);
 router.get('/:id', authenticate, applicationController.getById);
 const applySchema = Joi.object({
