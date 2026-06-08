@@ -131,6 +131,114 @@ export const analytics = asyncHandler(async (req, res) => {
   });
 });
 
+export const bulkUserAction = asyncHandler(async (req, res) => {
+  const { ids, action } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) throw new ApiError(400, 'VALIDATION_ERROR', 'ids must be a non-empty array');
+  if (!['suspend', 'activate', 'delete'].includes(action)) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid action');
+
+  const results = { success: [], failed: [] };
+
+  await Promise.all(ids.map(async (id) => {
+    try {
+      const user = await User.findById(id);
+      if (!user) { results.failed.push({ id, reason: 'Not found' }); return; }
+
+      if (action === 'delete') {
+        if (user.status === 'deleted') { results.failed.push({ id, reason: 'Already deleted' }); return; }
+        user.status = 'deleted';
+        user.deletedAt = new Date();
+        user.refreshTokenFamily = null;
+        await user.save();
+        await logAudit(req, 'user.delete', 'user', user._id, { targetEmail: user.email });
+      } else {
+        const newStatus = action === 'suspend' ? 'suspended' : 'active';
+        user.status = newStatus;
+        await user.save();
+        await logAudit(req, `user.${newStatus}`, 'user', user._id, { targetEmail: user.email });
+      }
+      results.success.push(id);
+    } catch {
+      results.failed.push({ id, reason: 'Update failed' });
+    }
+  }));
+
+  res.json({ success: true, data: results });
+});
+
+function escapeCsv(val) {
+  if (val == null) return '';
+  const s = String(val);
+  return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function toCsv(rows, columns) {
+  const header = columns.map((c) => c.label).join(',');
+  const body = rows.map((r) => columns.map((c) => escapeCsv(r[c.key])).join(',')).join('\n');
+  return `${header}\n${body}`;
+}
+
+export const exportUsers = asyncHandler(async (req, res) => {
+  const filter = {};
+  if (req.query.status) filter.status = req.query.status;
+  if (req.query.role) filter.role = req.query.role;
+
+  const users = await User.find(filter).select('-passwordHash').sort({ createdAt: -1 }).lean();
+
+  const csv = toCsv(users, [
+    { label: 'ID', key: '_id' },
+    { label: 'Email', key: 'email' },
+    { label: 'First Name', key: 'firstName' },
+    { label: 'Last Name', key: 'lastName' },
+    { label: 'Role', key: 'role' },
+    { label: 'Status', key: 'status' },
+    { label: 'Email Verified', key: 'emailVerified' },
+    { label: 'Joined', key: 'createdAt' },
+    { label: 'Deleted At', key: 'deletedAt' },
+  ]);
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="users-${Date.now()}.csv"`);
+  res.send(csv);
+});
+
+export const exportApplications = asyncHandler(async (req, res) => {
+  const filter = {};
+  if (req.query.status) filter.status = req.query.status;
+
+  const apps = await Application.find(filter)
+    .populate('internshipId', 'title')
+    .populate('studentId', 'fullName')
+    .populate('userId', 'email')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const rows = apps.map((a) => ({
+    id: a._id,
+    studentEmail: a.userId?.email,
+    studentName: a.studentId?.fullName,
+    internship: a.internshipId?.title,
+    status: a.status,
+    appliedAt: a.appliedAt,
+    studentRating: a.studentReview?.rating ?? '',
+    companyRating: a.companyReview?.rating ?? '',
+  }));
+
+  const csv = toCsv(rows, [
+    { label: 'ID', key: 'id' },
+    { label: 'Student Email', key: 'studentEmail' },
+    { label: 'Student Name', key: 'studentName' },
+    { label: 'Internship', key: 'internship' },
+    { label: 'Status', key: 'status' },
+    { label: 'Applied At', key: 'appliedAt' },
+    { label: 'Student Rating', key: 'studentRating' },
+    { label: 'Company Rating', key: 'companyRating' },
+  ]);
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="applications-${Date.now()}.csv"`);
+  res.send(csv);
+});
+
 export const getAuditLog = asyncHandler(async (req, res) => {
   const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
   const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);

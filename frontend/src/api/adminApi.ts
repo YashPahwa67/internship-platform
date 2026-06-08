@@ -37,6 +37,10 @@ export const adminApi = baseApi.injectEndpoints({
       providesTags: ['Admin'],
       keepUnusedDataFor: 0,
     }),
+    bulkUserAction: builder.mutation({
+      query: (body) => ({ url: '/admin/users/bulk-action', method: 'POST', body }),
+      invalidatesTags: ['Admin'],
+    }),
   }),
 });
 
@@ -49,4 +53,5 @@ export const {
   useGetPendingCompaniesQuery,
   useApproveCompanyMutation,
   useGetAuditLogQuery,
+  useBulkUserActionMutation,
 } = adminApi;

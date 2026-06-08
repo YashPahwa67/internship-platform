@@ -9,7 +9,7 @@ import { notifyUser } from './notification.service.js';
 import { enqueueEmail } from '../jobs/emailQueue.js';
 import logger from '../utils/logger.js';
 
-export async function applyForInternship({ userId, firstName, internshipId, coverLetter }) {
+export async function applyForInternship({ userId, firstName, internshipId, coverLetter, resumeOverride }) {
   if (!mongoose.Types.ObjectId.isValid(internshipId)) {
     throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid internship id');
   }
@@ -45,13 +45,13 @@ export async function applyForInternship({ userId, firstName, internshipId, cove
           companyId: internship.companyId,
           userId,
           coverLetter,
-          resumeSnapshot: student.resume
+          resumeSnapshot: resumeOverride || (student.resume
             ? {
                 url: student.resume.url,
                 filename: student.resume.filename,
                 uploadedAt: student.resume.uploadedAt,
               }
-            : undefined,
+            : undefined),
           status: 'applied',
           statusHistory: [{ status: 'applied', by: userId, note: 'Application submitted' }],
         },

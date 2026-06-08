@@ -12,7 +12,13 @@ export const applicationApi = baseApi.injectEndpoints({
       providesTags: (_r, _e, id) => [{ type: 'Applications', id }],
     }),
     apply: builder.mutation({
-      query: (body) => ({ url: '/applications', method: 'POST', body }),
+      query: (body) => ({
+        url: '/applications',
+        method: 'POST',
+        body,
+        // RTK Query sets Content-Type automatically: omit for FormData so browser sets boundary
+        ...(body instanceof FormData ? { formData: true } : {}),
+      }),
       invalidatesTags: ['Applications', 'Internships'],
     }),
     updateApplicationStatus: builder.mutation({

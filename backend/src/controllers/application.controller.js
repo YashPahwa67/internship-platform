@@ -12,6 +12,8 @@ import { applyForInternship } from '../services/application.service.js';
 import { enqueueEmail } from '../jobs/emailQueue.js';
 import logger from '../utils/logger.js';
 import { formatStudentProfile, formatResumeAsset } from '../utils/formatStudentProfile.js';
+import { uploadBuffer, resourceTypeForMime } from '../utils/cloudinary.util.js';
+import { config } from '../config/env.js';
 
 const VALID_TRANSITIONS = {
   applied: ['shortlisted', 'rejected', 'withdrawn'],
@@ -23,11 +25,30 @@ const VALID_TRANSITIONS = {
 };
 
 export const apply = asyncHandler(async (req, res) => {
+  let resumeOverride;
+  if (req.file?.buffer && config.isCloudinaryConfigured) {
+    const result = await uploadBuffer(req.file.buffer, {
+      resourceType: resourceTypeForMime(req.file.mimetype),
+      cloudinaryOptions: {
+        folder: `${config.cloudinary.folder}/resumes`,
+        resource_type: 'raw',
+        use_filename: true,
+      },
+    });
+    resumeOverride = {
+      url: result.secure_url,
+      publicId: result.public_id,
+      filename: req.file.originalname,
+      uploadedAt: new Date(),
+    };
+  }
+
   const { application, internship } = await applyForInternship({
     userId: req.user._id,
     firstName: req.user.firstName,
     internshipId: req.body.internshipId,
     coverLetter: req.body.coverLetter,
+    resumeOverride,
   });
   res.status(201).json({ success: true, data: formatApp(application, internship) });
 });

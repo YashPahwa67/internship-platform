@@ -1,14 +1,16 @@
-import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useParams, useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
 import {
   Container, Typography, Box, Button, CardContent, Chip, Grid, Skeleton, Alert,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import BlockIcon from '@mui/icons-material/Block';
+import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
+import { Helmet } from 'react-helmet-async';
 import { useGetInternshipQuery } from '../../api/internshipApi';
 import { useApplyMutation } from '../../api/applicationApi';
 import { useAppSelector } from '../../app/hooks';
 import { selectIsAuthenticated, selectUser } from '../../features/auth/authSlice';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import PremiumCard from '../../components/ui/PremiumCard';
 import FadeIn from '../../components/ui/FadeIn';
 import { useThemeMode } from '../../theme/ThemeProvider';
@@ -23,12 +25,16 @@ export default function InternshipDetailPage() {
   const isAuth = useAppSelector(selectIsAuthenticated);
   const user = useAppSelector(selectUser);
   const [coverLetter, setCoverLetter] = useState('');
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const resumeRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const { mode } = useThemeMode();
   const t = tokens[mode];
+  const location = useLocation();
 
   const job = data?.data;
   const isSuspended = user?.status === 'suspended';
+  const pageUrl = `${window.location.origin}${location.pathname}`;
 
   const handleApply = async () => {
     if (!isAuth) { navigate('/login'); return; }
@@ -41,9 +47,18 @@ export default function InternshipDetailPage() {
       return;
     }
     try {
-      const body: { internshipId: string; coverLetter?: string } = { internshipId: id! };
-      if (coverLetter.trim()) body.coverLetter = coverLetter.trim();
-      await apply(body).unwrap();
+      let body: FormData | { internshipId: string; coverLetter?: string };
+      if (resumeFile) {
+        const fd = new FormData();
+        fd.append('internshipId', id!);
+        if (coverLetter.trim()) fd.append('coverLetter', coverLetter.trim());
+        fd.append('resume', resumeFile);
+        body = fd;
+      } else {
+        body = { internshipId: id! } as { internshipId: string; coverLetter?: string };
+        if (coverLetter.trim()) (body as { internshipId: string; coverLetter?: string }).coverLetter = coverLetter.trim();
+      }
+      await apply(body as Parameters<typeof apply>[0]).unwrap();
       setMessage({ type: 'success', text: 'Application submitted successfully.' });
     } catch (err: unknown) {
       const e = err as {
@@ -83,6 +98,17 @@ export default function InternshipDetailPage() {
 
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+      <Helmet>
+        <title>{job.title} at {job.company?.name} — IMP</title>
+        <meta name="description" content={`${job.type} internship · ${job.location} · ₹${job.stipend?.min?.toLocaleString()}–₹${job.stipend?.max?.toLocaleString()}/mo · ${job.durationWeeks} weeks`} />
+        <meta property="og:title" content={`${job.title} at ${job.company?.name}`} />
+        <meta property="og:description" content={job.description?.slice(0, 200)} />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={pageUrl} />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content={`${job.title} at ${job.company?.name}`} />
+        <meta name="twitter:description" content={job.description?.slice(0, 200)} />
+      </Helmet>
       <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} sx={{ mb: 3 }} color="inherit">
         Back
       </Button>
@@ -162,7 +188,7 @@ export default function InternshipDetailPage() {
                       style={{
                         width: '100%',
                         minHeight: 88,
-                        marginBottom: 16,
+                        marginBottom: 12,
                         padding: 12,
                         borderRadius: 10,
                         border: `1px solid ${t.border}`,
@@ -175,6 +201,30 @@ export default function InternshipDetailPage() {
                         cursor: isSuspended ? 'not-allowed' : 'auto',
                       }}
                     />
+                    <input
+                      ref={resumeRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx,application/pdf"
+                      hidden
+                      onChange={(e) => setResumeFile(e.target.files?.[0] || null)}
+                    />
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      color="inherit"
+                      size="small"
+                      startIcon={<UploadFileOutlinedIcon />}
+                      onClick={() => resumeRef.current?.click()}
+                      disabled={isSuspended}
+                      sx={{ mb: 1.5, justifyContent: 'flex-start', textTransform: 'none' }}
+                    >
+                      {resumeFile ? resumeFile.name : 'Attach resume (optional)'}
+                    </Button>
+                    {resumeFile && (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, ml: 0.5 }}>
+                        This will override your profile resume for this application.
+                      </Typography>
+                    )}
                     <Button
                       fullWidth variant="contained" size="large"
                       onClick={handleApply}

@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import passport from 'passport';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger.js';
 import compression from 'compression';
 import mongoSanitize from 'express-mongo-sanitize';
 import xss from 'xss-clean';
@@ -74,6 +76,8 @@ export function createApp() {
     });
   });
 
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { customSiteTitle: 'IMP API Docs' }));
+  app.get('/api/docs.json', (_req, res) => res.json(swaggerSpec));
   app.use('/api/v1', globalLimiter, routes);
   app.use(errorHandler);
 
