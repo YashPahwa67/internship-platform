@@ -6,10 +6,29 @@ import { Student } from '../models/Student.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 
+function formatUser(u) {
+  return {
+    id: u._id,
+    email: u.email,
+    role: u.role,
+    status: u.status,
+    firstName: u.firstName,
+    lastName: u.lastName,
+    createdAt: u.createdAt,
+    deletedAt: u.deletedAt ?? null,
+  };
+}
+
 export const listUsers = asyncHandler(async (req, res) => {
   const filter = {};
   if (req.query.role) filter.role = req.query.role;
-  if (req.query.status) filter.status = req.query.status;
+
+  // When a status filter is provided use it directly; otherwise exclude deleted accounts
+  if (req.query.status) {
+    filter.status = req.query.status;
+  } else {
+    filter.status = { $ne: 'deleted' };
+  }
 
   const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
   const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
@@ -22,15 +41,7 @@ export const listUsers = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    data: users.map((u) => ({
-      id: u._id,
-      email: u.email,
-      role: u.role,
-      status: u.status,
-      firstName: u.firstName,
-      lastName: u.lastName,
-      createdAt: u.createdAt,
-    })),
+    data: users.map(formatUser),
     meta: { page, limit, total },
   });
 });
@@ -39,6 +50,32 @@ export const updateUserStatus = asyncHandler(async (req, res) => {
   const user = await User.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
   if (!user) throw new ApiError(404, 'NOT_FOUND', 'User not found');
   res.json({ success: true, data: { id: user._id, status: user.status } });
+});
+
+export const deleteUser = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) throw new ApiError(404, 'NOT_FOUND', 'User not found');
+  if (user.status === 'deleted') throw new ApiError(400, 'ALREADY_DELETED', 'User is already deleted');
+
+  user.status = 'deleted';
+  user.deletedAt = new Date();
+  // Invalidate all sessions by clearing the refresh token family
+  user.refreshTokenFamily = null;
+  await user.save();
+
+  res.json({ success: true, data: formatUser(user.toObject()) });
+});
+
+export const restoreUser = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) throw new ApiError(404, 'NOT_FOUND', 'User not found');
+  if (user.status !== 'deleted') throw new ApiError(400, 'NOT_DELETED', 'User is not deleted');
+
+  user.status = 'active';
+  user.deletedAt = undefined;
+  await user.save();
+
+  res.json({ success: true, data: formatUser(user.toObject()) });
 });
 
 export const approveCompany = asyncHandler(async (req, res) => {

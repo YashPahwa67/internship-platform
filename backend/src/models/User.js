@@ -9,9 +9,10 @@ const userSchema = new mongoose.Schema(
     role: { type: String, enum: Object.values(ROLES), required: true },
     status: {
       type: String,
-      enum: ['active', 'pending_verification', 'suspended'],
+      enum: ['active', 'pending_verification', 'suspended', 'deleted'],
       default: 'pending_verification',
     },
+    deletedAt: { type: Date },
     emailVerified: { type: Boolean, default: false },
     emailVerificationToken: { type: String, select: false },
     emailVerificationExpiry: { type: Date, select: false },

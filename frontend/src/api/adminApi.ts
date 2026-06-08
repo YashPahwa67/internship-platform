@@ -5,13 +5,23 @@ export const adminApi = baseApi.injectEndpoints({
     getAnalytics: builder.query({
       query: () => '/admin/analytics',
       providesTags: ['Admin'],
+      keepUnusedDataFor: 0,
     }),
     getUsers: builder.query({
       query: (params) => ({ url: '/admin/users', params }),
       providesTags: ['Admin'],
+      keepUnusedDataFor: 0,
     }),
     updateUserStatus: builder.mutation({
       query: ({ id, status }) => ({ url: `/admin/users/${id}/status`, method: 'PATCH', body: { status } }),
+      invalidatesTags: ['Admin'],
+    }),
+    deleteUser: builder.mutation({
+      query: (id: string) => ({ url: `/admin/users/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['Admin'],
+    }),
+    restoreUser: builder.mutation({
+      query: (id: string) => ({ url: `/admin/users/${id}/restore`, method: 'PATCH' }),
       invalidatesTags: ['Admin'],
     }),
     getPendingCompanies: builder.query({
@@ -29,6 +39,8 @@ export const {
   useGetAnalyticsQuery,
   useGetUsersQuery,
   useUpdateUserStatusMutation,
+  useDeleteUserMutation,
+  useRestoreUserMutation,
   useGetPendingCompaniesQuery,
   useApproveCompanyMutation,
 } = adminApi;
