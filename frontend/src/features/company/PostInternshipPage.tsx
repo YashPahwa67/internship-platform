@@ -1,18 +1,47 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { TextField, Button, Box, MenuItem, Alert, CircularProgress, Typography } from '@mui/material';
+import {
+  TextField, Button, Box, MenuItem, Alert, CircularProgress, Typography,
+  Switch, FormControlLabel, Divider, IconButton, Chip, Tooltip,
+} from '@mui/material';
 import BlockIcon from '@mui/icons-material/Block';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import LinkIcon from '@mui/icons-material/Link';
 import { alpha } from '@mui/material/styles';
 import {
   useCreateInternshipMutation,
   useUpdateInternshipMutation,
   useGetCompanyInternshipQuery,
+  useSaveApplicationFormMutation,
 } from '../../api/internshipApi';
 import { useAppSelector } from '../../app/hooks';
 import { selectUser } from '../../features/auth/authSlice';
 import PageHeader from '../../components/ui/PageHeader';
 import PremiumCard from '../../components/ui/PremiumCard';
 import FadeIn from '../../components/ui/FadeIn';
+
+const QUESTION_TYPES = [
+  { value: 'text', label: 'Short text' },
+  { value: 'textarea', label: 'Long text' },
+  { value: 'number', label: 'Number' },
+  { value: 'url', label: 'URL / Link' },
+  { value: 'select', label: 'Dropdown' },
+  { value: 'radio', label: 'Multiple choice' },
+];
+
+interface AppQuestion {
+  id: string;
+  type: 'text' | 'textarea' | 'select' | 'radio' | 'url' | 'number';
+  question: string;
+  required: boolean;
+  options: string[];
+}
+
+function makeId() {
+  return Math.random().toString(36).slice(2, 10);
+}
 
 const emptyForm = {
   title: '',
@@ -38,8 +67,14 @@ export default function PostInternshipPage() {
   });
   const [create, { isLoading: creating }] = useCreateInternshipMutation();
   const [update, { isLoading: updating }] = useUpdateInternshipMutation();
+  const [saveForm] = useSaveApplicationFormMutation();
+
   const [error, setError] = useState('');
   const [form, setForm] = useState(emptyForm);
+
+  const [requireResume, setRequireResume] = useState(false);
+  const [questions, setQuestions] = useState<AppQuestion[]>([]);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   useEffect(() => {
     const job = existing?.data;
@@ -55,6 +90,16 @@ export default function PostInternshipPage() {
       stipendMin: job.stipend?.min ?? 15000,
       stipendMax: job.stipend?.max ?? 25000,
     });
+    setRequireResume(job.requireResume ?? false);
+    setQuestions(
+      (job.applicationForm || []).map((q: AppQuestion) => ({
+        id: q.id || makeId(),
+        type: q.type || 'text',
+        question: q.question || '',
+        required: q.required ?? false,
+        options: q.options || [],
+      }))
+    );
   }, [existing]);
 
   const buildPayload = (submit: boolean) => ({
@@ -77,11 +122,28 @@ export default function PostInternshipPage() {
       return;
     }
     try {
+      let internshipId = id;
       if (isEdit && id) {
         await update({ id, ...buildPayload(submit) }).unwrap();
       } else {
-        await create(buildPayload(submit)).unwrap();
+        const result = await create(buildPayload(submit)).unwrap();
+        internshipId = result?.data?.id;
       }
+
+      if (internshipId) {
+        await saveForm({
+          id: internshipId,
+          requireResume,
+          questions: questions.map((q) => ({
+            id: q.id,
+            type: q.type,
+            question: q.question,
+            required: q.required,
+            options: q.options,
+          })),
+        }).unwrap();
+      }
+
       navigate('/company/internships');
     } catch (err: unknown) {
       const e = err as { data?: { message?: string; error?: { code?: string; message?: string } } };
@@ -92,6 +154,54 @@ export default function PostInternshipPage() {
       }
       setError(e?.data?.message || e?.data?.error?.message || 'Failed to save');
     }
+  };
+
+  const addQuestion = () => {
+    if (questions.length >= 20) return;
+    setQuestions((prev) => [
+      ...prev,
+      { id: makeId(), type: 'text', question: '', required: false, options: [] },
+    ]);
+  };
+
+  const removeQuestion = (idx: number) => {
+    setQuestions((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateQuestion = (idx: number, patch: Partial<AppQuestion>) => {
+    setQuestions((prev) => prev.map((q, i) => (i === idx ? { ...q, ...patch } : q)));
+  };
+
+  const addOption = (idx: number) => {
+    setQuestions((prev) =>
+      prev.map((q, i) => (i === idx ? { ...q, options: [...q.options, ''] } : q))
+    );
+  };
+
+  const updateOption = (qIdx: number, oIdx: number, val: string) => {
+    setQuestions((prev) =>
+      prev.map((q, i) =>
+        i === qIdx ? { ...q, options: q.options.map((o, j) => (j === oIdx ? val : o)) } : q
+      )
+    );
+  };
+
+  const removeOption = (qIdx: number, oIdx: number) => {
+    setQuestions((prev) =>
+      prev.map((q, i) =>
+        i === qIdx ? { ...q, options: q.options.filter((_, j) => j !== oIdx) } : q
+      )
+    );
+  };
+
+  const formLink = id ? `${window.location.origin}/internships/${id}` : null;
+
+  const handleCopyLink = () => {
+    if (!formLink) return;
+    navigator.clipboard.writeText(formLink).then(() => {
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    });
   };
 
   const isLoading = creating || updating;
@@ -229,7 +339,167 @@ export default function PostInternshipPage() {
                 disabled={isSuspended}
               />
             </Box>
-            <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+
+            <Divider sx={{ my: 3 }} />
+
+            {/* Application form builder */}
+            <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="subtitle1" fontWeight={600}>Application form</Typography>
+              {formLink && (
+                <Tooltip title={copySuccess ? 'Copied!' : 'Copy shareable form link'} placement="left">
+                  <Button
+                    size="small"
+                    startIcon={<LinkIcon />}
+                    endIcon={<ContentCopyIcon sx={{ fontSize: 14 }} />}
+                    onClick={handleCopyLink}
+                    color={copySuccess ? 'success' : 'inherit'}
+                    variant="outlined"
+                    sx={{ textTransform: 'none', fontSize: 12 }}
+                  >
+                    {copySuccess ? 'Copied!' : 'Share form link'}
+                  </Button>
+                </Tooltip>
+              )}
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Students will fill these out when applying. Share the internship link so candidates can apply directly.
+            </Typography>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={requireResume}
+                  onChange={(e) => setRequireResume(e.target.checked)}
+                  disabled={isSuspended}
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body2" fontWeight={500}>Require resume</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Students must attach a resume to apply
+                  </Typography>
+                </Box>
+              }
+              sx={{ mb: 2, alignItems: 'flex-start', ml: 0 }}
+            />
+
+            {questions.map((q, idx) => (
+              <Box
+                key={q.id}
+                sx={{
+                  mb: 2, p: 2, borderRadius: '10px',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  position: 'relative',
+                }}
+              >
+                <Box sx={{ display: 'flex', gap: 1, mb: 1.5, alignItems: 'flex-start' }}>
+                  <TextField
+                    size="small"
+                    select
+                    label="Type"
+                    value={q.type}
+                    onChange={(e) => updateQuestion(idx, { type: e.target.value as AppQuestion['type'], options: [] })}
+                    disabled={isSuspended}
+                    sx={{ width: 150 }}
+                  >
+                    {QUESTION_TYPES.map((t) => (
+                      <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label={`Question ${idx + 1}`}
+                    value={q.question}
+                    onChange={(e) => updateQuestion(idx, { question: e.target.value })}
+                    disabled={isSuspended}
+                    placeholder="e.g. Why do you want this internship?"
+                  />
+                  <IconButton
+                    size="small"
+                    onClick={() => removeQuestion(idx)}
+                    disabled={isSuspended}
+                    sx={{ mt: 0.5, color: 'text.secondary' }}
+                  >
+                    <DeleteOutlineIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        size="small"
+                        checked={q.required}
+                        onChange={(e) => updateQuestion(idx, { required: e.target.checked })}
+                        disabled={isSuspended}
+                      />
+                    }
+                    label={<Typography variant="caption">Required</Typography>}
+                    sx={{ mr: 0 }}
+                  />
+                  {(q.type === 'select' || q.type === 'radio') && (
+                    <Chip
+                      label={`${q.options.length} options`}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontSize: 11 }}
+                    />
+                  )}
+                </Box>
+                {(q.type === 'select' || q.type === 'radio') && (
+                  <Box sx={{ mt: 1.5, pl: 1 }}>
+                    {q.options.map((opt, oIdx) => (
+                      <Box key={oIdx} sx={{ display: 'flex', gap: 1, mb: 0.75, alignItems: 'center' }}>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          placeholder={`Option ${oIdx + 1}`}
+                          value={opt}
+                          onChange={(e) => updateOption(idx, oIdx, e.target.value)}
+                          disabled={isSuspended}
+                        />
+                        <IconButton
+                          size="small"
+                          onClick={() => removeOption(idx, oIdx)}
+                          disabled={isSuspended}
+                        >
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                    <Button
+                      size="small"
+                      startIcon={<AddIcon />}
+                      onClick={() => addOption(idx)}
+                      disabled={isSuspended || q.options.length >= 10}
+                      sx={{ textTransform: 'none', mt: 0.5 }}
+                    >
+                      Add option
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+            ))}
+
+            {questions.length < 20 && (
+              <Button
+                variant="outlined"
+                color="inherit"
+                startIcon={<AddIcon />}
+                onClick={addQuestion}
+                disabled={isSuspended}
+                sx={{ textTransform: 'none', mb: 3 }}
+                size="small"
+              >
+                Add question
+              </Button>
+            )}
+
+            <Divider sx={{ mb: 3 }} />
+
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <Button
                 variant="outlined"
                 color="inherit"

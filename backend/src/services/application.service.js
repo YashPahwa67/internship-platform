@@ -9,7 +9,7 @@ import { notifyUser } from './notification.service.js';
 import { enqueueEmail } from '../jobs/emailQueue.js';
 import logger from '../utils/logger.js';
 
-export async function applyForInternship({ userId, firstName, internshipId, coverLetter, resumeOverride }) {
+export async function applyForInternship({ userId, firstName, internshipId, coverLetter, resumeOverride, formResponses }) {
   if (!mongoose.Types.ObjectId.isValid(internshipId)) {
     throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid internship id');
   }
@@ -37,6 +37,22 @@ export async function applyForInternship({ userId, firstName, internshipId, cove
 
     if (!internship) throw new ApiError(400, 'INTERNSHIP_CLOSED', 'Internship not available or no openings');
 
+    if (internship.requireResume && !resumeOverride) {
+      await Internship.findByIdAndUpdate(internshipId, { $inc: { openings: 1, applicationCount: -1 } }).session(session);
+      throw new ApiError(400, 'RESUME_REQUIRED', 'This internship requires you to attach a resume.');
+    }
+
+    const requiredQuestions = (internship.applicationForm || []).filter((q) => q.required);
+    for (const q of requiredQuestions) {
+      const resp = (formResponses || []).find((r) => r.questionId === q.id);
+      const answer = resp?.answer;
+      const empty = !answer || (typeof answer === 'string' && !answer.trim()) || (Array.isArray(answer) && answer.length === 0);
+      if (empty) {
+        await Internship.findByIdAndUpdate(internshipId, { $inc: { openings: 1, applicationCount: -1 } }).session(session);
+        throw new ApiError(400, 'FORM_INCOMPLETE', `"${q.question}" is required`);
+      }
+    }
+
     const [created] = await Application.create(
       [
         {
@@ -52,6 +68,11 @@ export async function applyForInternship({ userId, firstName, internshipId, cove
                 uploadedAt: student.resume.uploadedAt,
               }
             : undefined),
+          formResponses: (formResponses || []).map((r) => ({
+            questionId: r.questionId,
+            question: r.question,
+            answer: r.answer,
+          })),
           status: 'applied',
           statusHistory: [{ status: 'applied', by: userId, note: 'Application submitted' }],
         },

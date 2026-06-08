@@ -56,6 +56,14 @@ export const internshipApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: [{ type: 'Internships', id: 'LIST' }, 'Internships'],
     }),
+    saveApplicationForm: builder.mutation({
+      query: ({ id, ...body }) => ({
+        url: `/internships/${id}/form`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: 'Internships', id }],
+    }),
   }),
 });
 
@@ -69,4 +77,5 @@ export const {
   useDeleteInternshipMutation,
   useGetPendingInternshipsQuery,
   useApproveInternshipMutation,
+  useSaveApplicationFormMutation,
 } = internshipApi;

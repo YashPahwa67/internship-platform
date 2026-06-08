@@ -43,12 +43,22 @@ export const apply = asyncHandler(async (req, res) => {
     };
   }
 
+  let formResponses;
+  try {
+    formResponses = req.body.formResponses
+      ? JSON.parse(req.body.formResponses)
+      : undefined;
+  } catch {
+    formResponses = undefined;
+  }
+
   const { application, internship } = await applyForInternship({
     userId: req.user._id,
     firstName: req.user.firstName,
     internshipId: req.body.internshipId,
     coverLetter: req.body.coverLetter,
     resumeOverride,
+    formResponses,
   });
   res.status(201).json({ success: true, data: formatApp(application, internship) });
 });
@@ -261,6 +271,7 @@ function formatApp(a, internship, options = {}) {
     coverLetter: a.coverLetter,
     appliedAt: a.appliedAt,
     resumeAtApplication: formatResumeAsset(a.resumeSnapshot),
+    formResponses: a.formResponses || [],
     internship: internship
       ? {
           id: internship._id,

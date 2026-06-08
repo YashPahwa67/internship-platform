@@ -23,6 +23,16 @@ const internshipSchema = new mongoose.Schema(
     publishedAt: { type: Date },
     applicationCount: { type: Number, default: 0 },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    requireResume: { type: Boolean, default: false },
+    applicationForm: [
+      {
+        id: { type: String, required: true },
+        type: { type: String, enum: ['text', 'textarea', 'select', 'radio', 'url', 'number'], default: 'text' },
+        question: { type: String, required: true, maxlength: 500 },
+        required: { type: Boolean, default: false },
+        options: [{ type: String }],
+      },
+    ],
   },
   { timestamps: true }
 );

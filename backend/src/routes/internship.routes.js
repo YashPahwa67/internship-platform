@@ -31,5 +31,15 @@ router.post('/', authenticate, companyOnly, notSuspended, validate(createSchema)
 router.put('/:id', authenticate, companyOnly, notSuspended, validate(createSchema), internshipController.update);
 router.delete('/:id', authenticate, companyOnly, notSuspended, internshipController.remove);
 router.post('/:id/approve', authenticate, adminOnly, internshipController.approve);
+router.patch('/:id/form', authenticate, companyOnly, notSuspended, validate(Joi.object({
+  requireResume: Joi.boolean(),
+  questions: Joi.array().items(Joi.object({
+    id: Joi.string().optional(),
+    type: Joi.string().valid('text', 'textarea', 'select', 'radio', 'url', 'number').required(),
+    question: Joi.string().max(500).required(),
+    required: Joi.boolean(),
+    options: Joi.array().items(Joi.string()).optional(),
+  })).max(20),
+})), internshipController.saveApplicationForm);
 
 export default router;

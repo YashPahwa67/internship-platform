@@ -1,6 +1,8 @@
 import { useParams, useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
 import {
   Container, Typography, Box, Button, CardContent, Chip, Grid, Skeleton, Alert,
+  TextField, FormControl, FormLabel, RadioGroup, FormControlLabel, Radio, Select,
+  MenuItem, InputLabel, Divider,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import BlockIcon from '@mui/icons-material/Block';
@@ -17,6 +19,14 @@ import { useThemeMode } from '../../theme/ThemeProvider';
 import { tokens } from '../../theme/designTokens';
 import { alpha } from '@mui/material/styles';
 
+interface FormQuestion {
+  id: string;
+  type: 'text' | 'textarea' | 'select' | 'radio' | 'url' | 'number';
+  question: string;
+  required: boolean;
+  options: string[];
+}
+
 export default function InternshipDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -27,6 +37,7 @@ export default function InternshipDetailPage() {
   const [coverLetter, setCoverLetter] = useState('');
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const resumeRef = useRef<HTMLInputElement>(null);
+  const [formAnswers, setFormAnswers] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const { mode } = useThemeMode();
   const t = tokens[mode];
@@ -35,6 +46,11 @@ export default function InternshipDetailPage() {
   const job = data?.data;
   const isSuspended = user?.status === 'suspended';
   const pageUrl = `${window.location.origin}${location.pathname}`;
+  const applicationForm: FormQuestion[] = job?.applicationForm || [];
+
+  const handleAnswerChange = (questionId: string, value: string) => {
+    setFormAnswers((prev) => ({ ...prev, [questionId]: value }));
+  };
 
   const handleApply = async () => {
     if (!isAuth) { navigate('/login'); return; }
@@ -46,19 +62,35 @@ export default function InternshipDetailPage() {
       setMessage({ type: 'error', text: 'Your account is suspended. You cannot apply for internships.' });
       return;
     }
-    try {
-      let body: FormData | { internshipId: string; coverLetter?: string };
-      if (resumeFile) {
-        const fd = new FormData();
-        fd.append('internshipId', id!);
-        if (coverLetter.trim()) fd.append('coverLetter', coverLetter.trim());
-        fd.append('resume', resumeFile);
-        body = fd;
-      } else {
-        body = { internshipId: id! } as { internshipId: string; coverLetter?: string };
-        if (coverLetter.trim()) (body as { internshipId: string; coverLetter?: string }).coverLetter = coverLetter.trim();
+
+    if (job?.requireResume && !resumeFile) {
+      setMessage({ type: 'error', text: 'A resume is required for this internship. Please attach your resume.' });
+      return;
+    }
+
+    for (const q of applicationForm) {
+      if (q.required && !formAnswers[q.id]?.trim()) {
+        setMessage({ type: 'error', text: `"${q.question}" is required.` });
+        return;
       }
-      await apply(body as Parameters<typeof apply>[0]).unwrap();
+    }
+
+    try {
+      const fd = new FormData();
+      fd.append('internshipId', id!);
+      if (coverLetter.trim()) fd.append('coverLetter', coverLetter.trim());
+      if (resumeFile) fd.append('resume', resumeFile);
+
+      if (applicationForm.length > 0) {
+        const responses = applicationForm.map((q) => ({
+          questionId: q.id,
+          question: q.question,
+          answer: formAnswers[q.id] || '',
+        }));
+        fd.append('formResponses', JSON.stringify(responses));
+      }
+
+      await apply(fd as Parameters<typeof apply>[0]).unwrap();
       setMessage({ type: 'success', text: 'Application submitted successfully.' });
     } catch (err: unknown) {
       const e = err as {
@@ -148,7 +180,6 @@ export default function InternshipDetailPage() {
               <CardContent sx={{ p: 3 }}>
                 {message && <Alert severity={message.type} sx={{ mb: 2 }}>{message.text}</Alert>}
 
-                {/* Suspended warning banner */}
                 {isAuth && user?.role === 'student' && isSuspended && (
                   <Box sx={{
                     mb: 2, p: 1.5, borderRadius: '10px',
@@ -177,6 +208,7 @@ export default function InternshipDetailPage() {
                   <Typography variant="caption" color="text.secondary">Openings</Typography>
                   <Typography fontWeight={500}>{job.openings}</Typography>
                 </Box>
+
                 {isAuth && user?.role === 'student' ? (
                   <>
                     <Typography variant="body2" color="text.secondary" gutterBottom>Cover letter (optional)</Typography>
@@ -211,24 +243,56 @@ export default function InternshipDetailPage() {
                     <Button
                       fullWidth
                       variant="outlined"
-                      color="inherit"
+                      color={job.requireResume && !resumeFile ? 'error' : 'inherit'}
                       size="small"
                       startIcon={<UploadFileOutlinedIcon />}
                       onClick={() => resumeRef.current?.click()}
                       disabled={isSuspended}
-                      sx={{ mb: 1.5, justifyContent: 'flex-start', textTransform: 'none' }}
+                      sx={{ mb: 0.5, justifyContent: 'flex-start', textTransform: 'none' }}
                     >
-                      {resumeFile ? resumeFile.name : 'Attach resume (optional)'}
+                      {resumeFile
+                        ? resumeFile.name
+                        : job.requireResume
+                          ? 'Attach resume (required) *'
+                          : 'Attach resume (optional)'}
                     </Button>
+                    {job.requireResume && !resumeFile && (
+                      <Typography variant="caption" color="error" sx={{ display: 'block', mb: 1, ml: 0.5 }}>
+                        Resume is required for this internship.
+                      </Typography>
+                    )}
                     {resumeFile && (
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, ml: 0.5 }}>
                         This will override your profile resume for this application.
                       </Typography>
                     )}
+
+                    {applicationForm.length > 0 && (
+                      <>
+                        <Divider sx={{ my: 2 }} />
+                        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5 }}>
+                          Application questions
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          {applicationForm.map((q) => (
+                            <ApplicationFormField
+                              key={q.id}
+                              question={q}
+                              value={formAnswers[q.id] || ''}
+                              onChange={(val) => handleAnswerChange(q.id, val)}
+                              disabled={isSuspended}
+                            />
+                          ))}
+                        </Box>
+                        <Divider sx={{ my: 2 }} />
+                      </>
+                    )}
+
                     <Button
                       fullWidth variant="contained" size="large"
                       onClick={handleApply}
                       disabled={applying || isSuspended}
+                      sx={{ mt: applicationForm.length > 0 ? 0 : 1.5 }}
                     >
                       {applying ? 'Applying...' : 'Apply now'}
                     </Button>
@@ -244,5 +308,59 @@ export default function InternshipDetailPage() {
         </Grid>
       </Grid>
     </Container>
+  );
+}
+
+function ApplicationFormField({
+  question,
+  value,
+  onChange,
+  disabled,
+}: {
+  question: FormQuestion;
+  value: string;
+  onChange: (val: string) => void;
+  disabled: boolean;
+}) {
+  const label = question.required ? `${question.question} *` : question.question;
+
+  if (question.type === 'radio') {
+    return (
+      <FormControl disabled={disabled}>
+        <FormLabel sx={{ fontSize: 13, mb: 0.5 }}>{label}</FormLabel>
+        <RadioGroup value={value} onChange={(e) => onChange(e.target.value)}>
+          {question.options.map((opt) => (
+            <FormControlLabel key={opt} value={opt} control={<Radio size="small" />} label={opt} />
+          ))}
+        </RadioGroup>
+      </FormControl>
+    );
+  }
+
+  if (question.type === 'select') {
+    return (
+      <FormControl fullWidth size="small" disabled={disabled}>
+        <InputLabel>{label}</InputLabel>
+        <Select value={value} label={label} onChange={(e) => onChange(e.target.value)}>
+          {question.options.map((opt) => (
+            <MenuItem key={opt} value={opt}>{opt}</MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+    );
+  }
+
+  return (
+    <TextField
+      fullWidth
+      size="small"
+      label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      multiline={question.type === 'textarea'}
+      rows={question.type === 'textarea' ? 3 : undefined}
+      type={question.type === 'number' ? 'number' : question.type === 'url' ? 'url' : 'text'}
+      disabled={disabled}
+    />
   );
 }

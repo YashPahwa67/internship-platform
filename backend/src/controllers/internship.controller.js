@@ -218,6 +218,24 @@ function formatInternship(i) {
       ? { id: company._id || company.id, name: company.name, slug: company.slug }
       : undefined,
     companyId: i.companyId?._id || i.companyId,
+    requireResume: i.requireResume ?? false,
+    applicationForm: i.applicationForm ?? [],
     createdAt: i.createdAt,
   };
 }
+
+export const saveApplicationForm = asyncHandler(async (req, res) => {
+  const internship = await Internship.findOne({ _id: req.params.id, companyId: req.user.companyId });
+  if (!internship) throw new ApiError(404, 'NOT_FOUND', 'Internship not found');
+
+  internship.requireResume = Boolean(req.body.requireResume);
+  internship.applicationForm = (req.body.questions || []).map((q) => ({
+    id: q.id || new mongoose.Types.ObjectId().toHexString(),
+    type: q.type || 'text',
+    question: q.question,
+    required: Boolean(q.required),
+    options: q.options || [],
+  }));
+  await internship.save();
+  res.json({ success: true, data: { requireResume: internship.requireResume, applicationForm: internship.applicationForm } });
+});

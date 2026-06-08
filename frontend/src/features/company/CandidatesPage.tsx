@@ -32,9 +32,12 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   offered:             ['rejected'],
 };
 
+type FormResponse = { questionId: string; question: string; answer: string | string[] };
+
 type ApplicationRow = {
   id: string; status: string; coverLetter?: string;
   resumeAtApplication?: { url?: string; filename?: string };
+  formResponses?: FormResponse[];
   student?: CandidateProfile; internship?: { title: string };
 };
 
@@ -275,6 +278,7 @@ export default function CandidatesPage() {
               student={profileDialog.student}
               coverLetter={profileDialog.coverLetter}
               resumeAtApplication={profileDialog.resumeAtApplication}
+              formResponses={profileDialog.formResponses}
             />
           )}
         </DialogContent>

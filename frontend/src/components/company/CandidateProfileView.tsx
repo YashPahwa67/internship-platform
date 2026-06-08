@@ -55,10 +55,13 @@ export type CandidateProfile = {
 
 type ResumeAsset = { url?: string; filename?: string };
 
+type FormResponse = { questionId: string; question: string; answer: string | string[] };
+
 type Props = {
   student?: CandidateProfile;
   coverLetter?: string;
   resumeAtApplication?: ResumeAsset;
+  formResponses?: FormResponse[];
 };
 
 function ResumeLink({ label, asset }: { label: string; asset?: ResumeAsset }) {
@@ -82,7 +85,7 @@ function ResumeLink({ label, asset }: { label: string; asset?: ResumeAsset }) {
   );
 }
 
-export default function CandidateProfileView({ student, coverLetter, resumeAtApplication }: Props) {
+export default function CandidateProfileView({ student, coverLetter, resumeAtApplication, formResponses }: Props) {
   if (!student) {
     return (
       <Typography variant="body2" color="text.secondary">
@@ -158,6 +161,24 @@ export default function CandidateProfileView({ student, coverLetter, resumeAtApp
           </Typography>
         )}
       </Box>
+
+      {formResponses && formResponses.length > 0 && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+            Application form responses
+          </Typography>
+          {formResponses.map((r) => (
+            <Box key={r.questionId} sx={{ mb: 1.5 }}>
+              <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+                {r.question}
+              </Typography>
+              <Typography variant="body2">
+                {Array.isArray(r.answer) ? r.answer.join(', ') : r.answer || <em style={{ opacity: 0.5 }}>—</em>}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      )}
 
       {coverLetter && (
         <Box sx={{ mb: 2 }}>
