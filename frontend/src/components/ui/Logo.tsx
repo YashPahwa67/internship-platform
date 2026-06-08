@@ -11,9 +11,11 @@ interface LogoProps {
   /** Extra sx applied to the text container — use to control responsive display */
   textSx?: object;
   to?: string;
+  /** Force white text regardless of theme — for dark hero backgrounds */
+  light?: boolean;
 }
 
-export default function Logo({ size = 32, showText = true, textSx, to = '/' }: LogoProps) {
+export default function Logo({ size = 32, showText = true, textSx, to = '/', light = false }: LogoProps) {
   const { mode } = useThemeMode();
   const t = tokens[mode];
   const radius = Math.round(size * 0.275);
@@ -51,7 +53,7 @@ export default function Logo({ size = 32, showText = true, textSx, to = '/' }: L
               fontWeight: 700,
               fontSize: '0.9375rem',
               lineHeight: 1.25,
-              color: 'text.primary',
+              color: light ? 'white' : 'text.primary',
               letterSpacing: '-0.025em',
             }}
           >
@@ -63,7 +65,7 @@ export default function Logo({ size = 32, showText = true, textSx, to = '/' }: L
               display: 'block',
               fontSize: '0.6875rem',
               lineHeight: 1.3,
-              color: 'text.disabled',
+              color: light ? 'rgba(255,255,255,0.48)' : 'text.disabled',
               letterSpacing: '0.01em',
             }}
           >

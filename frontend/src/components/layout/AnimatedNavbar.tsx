@@ -31,6 +31,9 @@ export default function AnimatedNavbar() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // When unscrolled on the landing page, the hero is dark — force white text
+  const onDarkHero = location.pathname === '/' && !scrolled;
+
   const dashboardPath =
     user?.role === 'admin' ? '/admin/dashboard'
     : user?.role === 'company_hr' ? '/company/dashboard'
@@ -60,7 +63,7 @@ export default function AnimatedNavbar() {
 
             {/* Logo */}
             <Box sx={{ mr: { md: 4 } }}>
-              <Logo size={30} textSx={{ display: { xs: 'none', sm: 'block' } }} />
+              <Logo size={30} light={onDarkHero} textSx={{ display: { xs: 'none', sm: 'block' } }} />
             </Box>
 
             {/* Desktop nav links */}
@@ -73,16 +76,20 @@ export default function AnimatedNavbar() {
                     component={RouterLink}
                     to={link.path}
                     sx={{
-                      color: active ? 'text.primary' : 'text.secondary',
+                      color: onDarkHero
+                        ? (active ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.65)')
+                        : (active ? 'text.primary' : 'text.secondary'),
                       fontWeight: active ? 600 : 500,
                       fontSize: '0.9375rem',
                       minWidth: 'auto',
                       px: 1.5,
-                      bgcolor: active ? (mode === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)') : 'transparent',
+                      bgcolor: active
+                        ? (onDarkHero ? 'rgba(255,255,255,0.08)' : (mode === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)'))
+                        : 'transparent',
                       borderRadius: '8px',
                       '&:hover': {
-                        bgcolor: mode === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)',
-                        color: 'text.primary',
+                        bgcolor: onDarkHero ? 'rgba(255,255,255,0.1)' : (mode === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)'),
+                        color: onDarkHero ? 'white' : 'text.primary',
                       },
                     }}
                   >
@@ -102,10 +109,13 @@ export default function AnimatedNavbar() {
               sx={{
                 mr: 0.5,
                 width: 36, height: 36,
-                border: `1px solid ${t.border}`,
+                border: onDarkHero ? '1px solid rgba(255,255,255,0.2)' : `1px solid ${t.border}`,
                 borderRadius: '10px',
-                color: 'text.secondary',
-                '&:hover': { borderColor: t.textMuted, color: 'text.primary' },
+                color: onDarkHero ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+                '&:hover': {
+                  borderColor: onDarkHero ? 'rgba(255,255,255,0.4)' : t.textMuted,
+                  color: onDarkHero ? 'white' : 'text.primary',
+                },
               }}
             >
               {mode === 'light'
@@ -124,7 +134,11 @@ export default function AnimatedNavbar() {
                   <Button
                     component={RouterLink}
                     to="/login"
-                    sx={{ color: 'text.secondary', fontWeight: 500, '&:hover': { color: 'text.primary' } }}
+                    sx={{
+                      color: onDarkHero ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+                      fontWeight: 500,
+                      '&:hover': { color: onDarkHero ? 'white' : 'text.primary' },
+                    }}
                     size="small"
                   >
                     Log in
