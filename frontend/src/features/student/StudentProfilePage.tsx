@@ -2,8 +2,9 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   TextField, Button, Box, Chip, Alert, Avatar, Typography, Divider, IconButton, Link,
-  Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress,
+  Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, Autocomplete,
 } from '@mui/material';
+import { SKILLS_LIST, isKnownSkill } from '../../data/skills';
 import ProfileCompleteness from '../../components/ui/ProfileCompleteness';
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
@@ -106,12 +107,6 @@ export default function StudentProfilePage() {
       syncProfileToAuth(dispatch, profile);
     }
   }, [profile, dispatch]);
-
-  const addSkill = () => {
-    if (form.skillInput.trim() && !form.skills.includes(form.skillInput.trim())) {
-      setForm({ ...form, skills: [...form.skills, form.skillInput.trim()], skillInput: '' });
-    }
-  };
 
   const handleSave = async () => {
     const { skillInput, graduationYear, ...rest } = form;
@@ -345,20 +340,73 @@ export default function StudentProfilePage() {
             <TextField fullWidth label="Bio" multiline rows={4} value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} margin="normal" />
 
             <Typography variant="subtitle2" fontWeight={600} sx={{ mt: 2, mb: 1 }}>Skills</Typography>
-            <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-              <TextField
-                size="small"
-                label="Add skill"
-                value={form.skillInput}
-                onChange={(e) => setForm({ ...form, skillInput: e.target.value })}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
-                sx={{ flex: 1 }}
-              />
-              <Button variant="outlined" onClick={addSkill} color="inherit">Add</Button>
-            </Box>
+            <Autocomplete
+              freeSolo
+              options={SKILLS_LIST.filter((s) => !form.skills.includes(s))}
+              inputValue={form.skillInput}
+              onInputChange={(_, val) => setForm({ ...form, skillInput: val })}
+              onChange={(_, val) => {
+                if (!val) return;
+                let trimmed = typeof val === 'string' ? val.trim() : val as string;
+                // Strip the 'Add "..."' wrapper injected by filterOptions
+                const addMatch = trimmed.match(/^Add "(.+)"$/);
+                if (addMatch) trimmed = addMatch[1];
+                if (trimmed && !form.skills.includes(trimmed)) {
+                  setForm({ ...form, skills: [...form.skills, trimmed], skillInput: '' });
+                }
+              }}
+              filterOptions={(options, { inputValue }) => {
+                const q = inputValue.toLowerCase();
+                if (!q) return options.slice(0, 50);
+                const filtered = options.filter((o) => o.toLowerCase().includes(q)).slice(0, 40);
+                const exactMatch = filtered.some((o) => o.toLowerCase() === q);
+                if (!exactMatch && inputValue.trim() && !form.skills.includes(inputValue.trim())) {
+                  filtered.push(`Add "${inputValue.trim()}"`);
+                }
+                return filtered;
+              }}
+              renderOption={(props, option) => {
+                const isCustom = option.startsWith('Add "');
+                return (
+                  <li {...props} key={option}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                      <Typography variant="body2" sx={{ flex: 1 }}>{isCustom ? option : option}</Typography>
+                      {!isCustom && !isKnownSkill(option) && (
+                        <Chip label="custom" size="small" sx={{ fontSize: '0.65rem', height: 18 }} />
+                      )}
+                    </Box>
+                  </li>
+                );
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label="Search or add skill"
+                  placeholder="e.g. React, Python, Figma…"
+                  helperText="Select from the list or type your own and press Enter"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && form.skillInput.trim()) {
+                      e.preventDefault();
+                      const trimmed = form.skillInput.trim();
+                      if (!form.skills.includes(trimmed)) {
+                        setForm({ ...form, skills: [...form.skills, trimmed], skillInput: '' });
+                      }
+                    }
+                  }}
+                />
+              )}
+              sx={{ mb: 1.5 }}
+            />
             <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 3 }}>
               {form.skills.map((s) => (
-                <Chip key={s} label={s} onDelete={() => setForm({ ...form, skills: form.skills.filter((x) => x !== s) })} />
+                <Chip
+                  key={s}
+                  label={s}
+                  size="small"
+                  variant={isKnownSkill(s) ? 'filled' : 'outlined'}
+                  onDelete={() => setForm({ ...form, skills: form.skills.filter((x) => x !== s) })}
+                />
               ))}
             </Box>
 
