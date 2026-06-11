@@ -6,6 +6,7 @@ import { registerSchema, loginSchema } from '../validators/auth.validator.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { loginLimiter, otpLimiter } from '../middleware/rateLimiter.js';
 import rateLimit from 'express-rate-limit';
+import { config } from '../config/env.js';
 
 const router = Router();
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
@@ -24,11 +25,24 @@ router.post('/email-change/confirm', authenticate, authController.confirmEmailCh
 router.delete('/account', authenticate, authController.deleteAccount);
 router.get('/me', authenticate, authController.me);
 
-// Google OAuth
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
-router.get('/google/callback',
-  passport.authenticate('google', { failureRedirect: '/login?error=oauth_failed', session: false }),
-  authController.googleCallback
-);
+// Google OAuth — only register routes when credentials are configured
+if (config.google.clientId && config.google.clientSecret) {
+  router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false, state: false }));
+  router.get('/google/callback',
+    (req, res, next) => {
+      passport.authenticate('google', { session: false, state: false }, (err, user, info) => {
+        if (err) { console.error('[Google OAuth] error:', err); return res.redirect(`${config.clientUrl}/login?error=oauth_failed`); }
+        if (!user) { console.error('[Google OAuth] no user, info:', info); return res.redirect(`${config.clientUrl}/login?error=oauth_failed`); }
+        req.user = user;
+        next();
+      })(req, res, next);
+    },
+    authController.googleCallback
+  );
+} else {
+  router.get('/google', (_req, res) => {
+    res.redirect(`${config.clientUrl}/login?error=google_not_configured`);
+  });
+}
 
 export default router;

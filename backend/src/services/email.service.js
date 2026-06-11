@@ -11,6 +11,9 @@ async function getTransporter() {
       port: config.smtp.port || 587,
       secure: (config.smtp.port || 587) === 465,
       auth: { user: config.smtp.user, pass: config.smtp.pass },
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 10000,
     });
   }
 
@@ -84,7 +87,11 @@ export async function sendEmail({ to, subject, html, text }) {
 
   if (!config.smtp.host) {
     const previewUrl = nodemailer.getTestMessageUrl(info);
-    console.log(`\n\x1b[33m[DEV] OTP email preview → \x1b[36m${previewUrl}\x1b[0m\n`);
+    console.log(`\n\x1b[33m╔════════════════════════════════════════╗`);
+    console.log(`║  [DEV] Email to: ${to}`);
+    console.log(`║  Subject: ${subject}`);
+    console.log(`║  Preview → \x1b[36m${previewUrl}\x1b[33m`);
+    console.log(`╚════════════════════════════════════════╝\x1b[0m\n`);
   } else {
     logger.info('Email sent', { to, messageId: info.messageId });
   }

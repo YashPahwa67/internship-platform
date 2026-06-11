@@ -13,6 +13,7 @@ import {
 } from './redisToken.service.js';
 import { sendOtpEmail, sendEmailChangeOtp, sendPasswordResetOtp } from './email.service.js';
 import { config } from '../config/env.js';
+import logger from '../utils/logger.js';
 
 function slugify(text) {
   return text

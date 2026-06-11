@@ -29,6 +29,7 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().email().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  BACKEND_URL: z.string().url().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -83,4 +84,5 @@ export const config = {
     clientId: env.GOOGLE_CLIENT_ID,
     clientSecret: env.GOOGLE_CLIENT_SECRET,
   },
+  backendUrl: env.BACKEND_URL || `http://localhost:${env.PORT || 5001}`,
 };

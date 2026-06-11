@@ -135,7 +135,7 @@ export default function AdminUsersPage() {
         }
       />
 
-      <Tabs value={tab} onChange={(_, v) => { setTab(v); setSelected(new Set()); }} sx={{ mb: 3, borderBottom: `1px solid ${t.border}` }}>
+      <Tabs value={tab} onChange={(_: React.SyntheticEvent, v: number) => { setTab(v); setSelected(new Set()); }} sx={{ mb: 3, borderBottom: `1px solid ${t.border}` }}>
         <Tab label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>Users {activeUsers.length > 0 && <Chip label={activeUsers.length} size="small" sx={{ height: 20, fontSize: '0.72rem', fontWeight: 600 }} />}</Box>} />
         <Tab label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>Deleted accounts {deletedUsers.length > 0 && <Chip label={deletedUsers.length} size="small" sx={{ height: 20, fontSize: '0.72rem', fontWeight: 700, bgcolor: alpha('#ef4444', 0.12), color: '#ef4444' }} />}</Box>} />
       </Tabs>

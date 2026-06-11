@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
+import PageTransition from '../ui/PageTransition';
 import {
   Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText,
   AppBar, Toolbar, Typography, IconButton, Badge, Avatar, Menu, MenuItem, Divider,
@@ -205,7 +206,7 @@ export default function DashboardLayout() {
             transition: 'all 0.2s',
             '&:hover': { borderColor: t.accent, bgcolor: t.accentMuted },
           }}
-          onClick={(e) => setAnchorEl(e.currentTarget as HTMLElement)}
+          onClick={(e: React.MouseEvent<HTMLDivElement>) => setAnchorEl(e.currentTarget as HTMLElement)}
         >
           <Avatar
             src={avatarUrl}
@@ -300,7 +301,7 @@ export default function DashboardLayout() {
 
           {/* Avatar */}
           <IconButton
-            onClick={(e) => setAnchorEl(e.currentTarget)}
+            onClick={(e: React.MouseEvent<HTMLButtonElement>) => setAnchorEl(e.currentTarget)}
             sx={{ p: 0.25 }}
           >
             <Avatar
@@ -356,8 +357,12 @@ export default function DashboardLayout() {
             '& .MuiDrawer-paper': {
               width: DRAWER_WIDTH,
               boxSizing: 'border-box',
-              bgcolor: mode === 'light' ? t.bgMuted : t.sidebarBg,
-              borderRight: `1px solid ${t.sidebarBorder}`,
+              bgcolor: mode === 'light'
+                ? t.bgMuted
+                : 'rgba(10, 10, 12, 0.82)',
+              backdropFilter: mode === 'dark' ? 'blur(20px) saturate(160%)' : 'none',
+              WebkitBackdropFilter: mode === 'dark' ? 'blur(20px) saturate(160%)' : 'none',
+              borderRight: `1px solid ${mode === 'dark' ? 'rgba(255,255,255,0.055)' : t.sidebarBorder}`,
             },
           }}
         >
@@ -378,7 +383,9 @@ export default function DashboardLayout() {
       >
         <Toolbar sx={{ minHeight: { xs: 60, md: 64 } }} />
         <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 }, px: { xs: 2, sm: 3 } }}>
-          <Outlet />
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
         </Container>
       </Box>
     </Box>

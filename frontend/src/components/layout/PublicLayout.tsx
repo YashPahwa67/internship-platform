@@ -3,6 +3,7 @@ import { Box, Container, Typography, Link, Grid } from '@mui/material';
 import AnimatedNavbar from './AnimatedNavbar';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { tokens } from '../../theme/designTokens';
+import PageTransition from '../ui/PageTransition';
 
 export default function PublicLayout() {
   const { mode } = useThemeMode();
@@ -15,7 +16,13 @@ export default function PublicLayout() {
       <AnimatedNavbar />
       {/* On the home page, LandingPage owns its own layout including footer */}
       <Box component="main" sx={{ flex: 1, pt: isHome ? 0 : { xs: 8, md: 9 } }}>
-        <Outlet />
+        {isHome ? (
+          <Outlet />
+        ) : (
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
+        )}
       </Box>
       {!isHome && (
         <Box

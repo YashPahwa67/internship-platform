@@ -511,14 +511,14 @@ export default function PostInternshipPage() {
               <Button
                 variant="outlined"
                 color="inherit"
-                onClick={(e) => handleSubmit(e, false)}
+                onClick={(e: React.MouseEvent) => handleSubmit(e, false)}
                 disabled={isLoading || isSuspended}
               >
                 Save draft
               </Button>
               <Button
                 variant="contained"
-                onClick={(e) => handleSubmit(e, true)}
+                onClick={(e: React.MouseEvent) => handleSubmit(e, true)}
                 disabled={isLoading || isSuspended}
               >
                 {isLoading ? 'Saving...' : isEdit ? 'Publish changes' : 'Publish listing'}

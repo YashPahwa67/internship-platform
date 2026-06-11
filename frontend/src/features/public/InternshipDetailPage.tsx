@@ -293,7 +293,7 @@ export default function InternshipDetailPage() {
                     <Box
                       component="textarea"
                       value={coverLetter}
-                      onChange={(e) => setCoverLetter(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setCoverLetter(e.target.value)}
                       disabled={isSuspended}
                       style={{
                         width: '100%',

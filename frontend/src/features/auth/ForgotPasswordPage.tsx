@@ -3,6 +3,7 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
   Box, TextField, Button, Alert, Typography, Link, CircularProgress,
 } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import AuthCard from '../../components/ui/AuthCard';
 import { useForgotPasswordMutation, useResetPasswordMutation } from '../../api/authApi';
 import { useThemeMode } from '../../theme/ThemeProvider';
@@ -26,6 +27,7 @@ export default function ForgotPasswordPage() {
   const [success, setSuccess] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [forgotPassword, { isLoading: sending }] = useForgotPasswordMutation();
   const [resetPassword, { isLoading: resetting }] = useResetPasswordMutation();
 
@@ -35,10 +37,31 @@ export default function ForgotPasswordPage() {
       await forgotPassword({ email }).unwrap();
       setStep('otp');
       setDigits(Array(OTP_LENGTH).fill(''));
+      setResendCooldown(60);
+      const timer = setInterval(() => {
+        setResendCooldown((c) => { if (c <= 1) { clearInterval(timer); return 0; } return c - 1; });
+      }, 1000);
       setTimeout(() => inputRefs.current[0]?.focus(), 100);
     } catch (err: unknown) {
-      const e = err as { data?: { error?: { message?: string } } };
-      setError(e?.data?.error?.message || 'Failed to send code');
+      const e = err as { data?: { message?: string } };
+      setError(e?.data?.message || 'Failed to send code');
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0) return;
+    setError('');
+    try {
+      await forgotPassword({ email }).unwrap();
+      setDigits(Array(OTP_LENGTH).fill(''));
+      setResendCooldown(60);
+      const timer = setInterval(() => {
+        setResendCooldown((c) => { if (c <= 1) { clearInterval(timer); return 0; } return c - 1; });
+      }, 1000);
+      setTimeout(() => inputRefs.current[0]?.focus(), 100);
+    } catch (err: unknown) {
+      const e = err as { data?: { message?: string } };
+      setError(e?.data?.message || 'Failed to resend code');
     }
   };
 
@@ -66,8 +89,8 @@ export default function ForgotPasswordPage() {
       setSuccess(true);
       setTimeout(() => navigate('/login'), 2500);
     } catch (err: unknown) {
-      const e = err as { data?: { error?: { message?: string } } };
-      setError(e?.data?.error?.message || 'Invalid code or request');
+      const e = err as { data?: { message?: string } };
+      setError(e?.data?.message || 'Invalid code or request');
       setDigits(Array(OTP_LENGTH).fill(''));
       setTimeout(() => inputRefs.current[0]?.focus(), 50);
     }
@@ -115,7 +138,7 @@ export default function ForgotPasswordPage() {
       </Typography>
 
       {/* 6-box OTP */}
-      <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'center', mb: 1.5 }}>
         {digits.map((d, i) => (
           <Box
             key={i}
@@ -136,6 +159,19 @@ export default function ForgotPasswordPage() {
             }}
           />
         ))}
+      </Box>
+
+      {/* Resend row */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', mb: 2 }}>
+        <Button
+          size="small" variant="text" color="primary"
+          startIcon={sending ? <CircularProgress size={14} color="inherit" /> : <RefreshIcon sx={{ fontSize: 16 }} />}
+          onClick={handleResend}
+          disabled={resendCooldown > 0 || sending}
+          sx={{ fontSize: '0.8rem', textTransform: 'none', minWidth: 0 }}
+        >
+          {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
+        </Button>
       </Box>
 
       <TextField fullWidth type="password" label="New password" value={newPassword}

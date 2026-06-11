@@ -1,10 +1,8 @@
 import { useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
-  TextField, Button, Alert, Box, Link, Typography, ToggleButton, ToggleButtonGroup, Divider,
+  TextField, Button, Alert, Box, Link, Typography, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
-
-const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 import { useRegisterMutation } from '../../api/authApi';
 import AuthCard from '../../components/ui/AuthCard';
 import { useThemeMode } from '../../theme/ThemeProvider';
@@ -73,25 +71,6 @@ export default function RegisterPage() {
           {isLoading ? 'Creating...' : 'Create account'}
         </Button>
       </Box>
-      <Divider sx={{ my: 2 }}>
-        <Typography variant="caption" color="text.disabled">or</Typography>
-      </Divider>
-      <Button
-        fullWidth
-        variant="outlined"
-        color="inherit"
-        size="large"
-        onClick={() => { window.location.href = `${API_BASE}/auth/google`; }}
-        sx={{ gap: 1.5, fontWeight: 500 }}
-      >
-        <Box
-          component="img"
-          src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-          alt="Google"
-          sx={{ width: 18, height: 18 }}
-        />
-        Continue with Google
-      </Button>
       <Typography variant="body2" sx={{ mt: 3, textAlign: 'center' }} color="text.secondary">
         Already have an account?{' '}
         <Link component={RouterLink} to="/login" color="text.primary" fontWeight={600}>Sign in</Link>

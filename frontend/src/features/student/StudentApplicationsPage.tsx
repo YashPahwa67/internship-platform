@@ -164,7 +164,7 @@ export default function StudentApplicationsPage() {
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
                 <Rating
                   value={rating}
-                  onChange={(_, v) => setRating(v)}
+                  onChange={(_: React.SyntheticEvent, v: number | null) => setRating(v)}
                   size="large"
                 />
               </Box>

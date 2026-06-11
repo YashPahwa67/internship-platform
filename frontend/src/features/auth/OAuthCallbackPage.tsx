@@ -26,7 +26,9 @@ export default function OAuthCallbackPage() {
 
     const token = decodeURIComponent(match[1]);
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
+      // JWT uses base64url — convert to standard base64 before atob
+      const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(b64));
       const user = {
         id: payload.sub,
         email: payload.email,

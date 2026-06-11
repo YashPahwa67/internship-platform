@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, lazy, Suspense } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
   motion,
@@ -14,6 +14,15 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined';
 import { useGetInternshipsQuery } from '../../api/internshipApi';
+
+// 3D components — lazily loaded so they never block initial paint
+const HeroScene    = lazy(() => import('../../components/3d/HeroScene'));
+const AmbientCanvas = lazy(() => import('../../components/3d/AmbientCanvas'));
+
+// Respect prefers-reduced-motion at module level (synchronous, no hook needed)
+const reducedMotion =
+  typeof window !== 'undefined' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // Always-dark color palette — the landing page is always cinematic dark
 const C = {
@@ -255,8 +264,30 @@ export default function LandingPage() {
           maskImage: 'radial-gradient(ellipse 100% 80% at 50% 0%, black 20%, transparent 90%)',
         }} />
 
+        {/* ── 3D orb — sits behind floating cards, above gradient bg ── */}
+        {!reducedMotion && (
+          <Box
+            sx={{
+              display: { xs: 'none', md: 'block' },
+              position: 'absolute',
+              right: { md: '3%', lg: '4%' },
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: { md: 420, lg: 520 },
+              height: { md: 420, lg: 520 },
+              zIndex: 1,
+              pointerEvents: 'none',
+              filter: 'drop-shadow(0 0 60px rgba(59,99,248,0.45)) drop-shadow(0 0 120px rgba(107,139,255,0.2))',
+            }}
+          >
+            <Suspense fallback={null}>
+              <HeroScene />
+            </Suspense>
+          </Box>
+        )}
+
         {/* Floating cards — lg screens only */}
-        <Box sx={{ display: { xs: 'none', lg: 'block' }, position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }}>
+        <Box sx={{ display: { xs: 'none', lg: 'block' }, position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none' }}>
           <motion.div style={{ position: 'absolute', top: '12%', right: '6%', y: fc1Y }}>
             <motion.div initial={{ opacity: 0, x: 70, scale: 0.88 }} animate={{ opacity: 1, x: 0, scale: 1 }} transition={{ duration: 1.2, delay: 0.9, ease: [0.22, 1, 0.36, 1] }}>
               <motion.div animate={{ y: [0, -16, 0] }} transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut' }}>
@@ -338,7 +369,7 @@ export default function LandingPage() {
               <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 1.0 }}>
                 <Box
                   component="form"
-                  onSubmit={(e) => {
+                  onSubmit={(e: React.FormEvent) => {
                     e.preventDefault();
                     navigate(q ? `/internships?q=${encodeURIComponent(q)}` : '/internships');
                   }}
@@ -761,6 +792,13 @@ export default function LandingPage() {
           </Box>
         </Container>
       </Box>
+
+      {/* ── Ambient particle field — fixed behind the entire landing page ── */}
+      {!reducedMotion && (
+        <Suspense fallback={null}>
+          <AmbientCanvas mode="fixed" count={320} />
+        </Suspense>
+      )}
     </Box>
   );
 }

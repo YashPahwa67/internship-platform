@@ -200,10 +200,10 @@ export default function StudentInternshipsPage() {
                     </Typography>
                     <Slider
                       value={stipend}
-                      onChange={(_, v) => setStipend(v as [number, number])}
+                      onChange={(_: Event, v: number | number[]) => setStipend(v as [number, number])}
                       min={0} max={100000} step={5000}
                       valueLabelDisplay="auto"
-                      valueLabelFormat={(v) => `₹${(v / 1000).toFixed(0)}k`}
+                      valueLabelFormat={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
                       sx={{ color: t.accent }}
                     />
                   </Grid>
@@ -218,10 +218,10 @@ export default function StudentInternshipsPage() {
                     </Typography>
                     <Slider
                       value={duration}
-                      onChange={(_, v) => setDuration(v as [number, number])}
+                      onChange={(_: Event, v: number | number[]) => setDuration(v as [number, number])}
                       min={1} max={52} step={1}
                       valueLabelDisplay="auto"
-                      valueLabelFormat={(v) => `${v}w`}
+                      valueLabelFormat={(v: number) => `${v}w`}
                       sx={{ color: t.accent }}
                     />
                   </Grid>

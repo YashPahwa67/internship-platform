@@ -8,10 +8,12 @@ if (config.google.clientId && config.google.clientSecret) {
       {
         clientID: config.google.clientId,
         clientSecret: config.google.clientSecret,
-        callbackURL: '/api/v1/auth/google/callback',
+        callbackURL: `${config.backendUrl}/api/v1/auth/google/callback`,
         scope: ['profile', 'email'],
+        state: false,
       },
       async (_accessToken, _refreshToken, profile, done) => {
+        console.log('[Google OAuth] profile received:', profile?.id, profile?.emails?.[0]?.value);
         done(null, profile);
       }
     )
