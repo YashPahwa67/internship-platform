@@ -32,8 +32,12 @@ export default function RegisterPage() {
       await register(payload).unwrap();
       navigate('/verify-otp', { state: { email: form.email } });
     } catch (err: unknown) {
-      const e = err as { data?: { error?: { message?: string; details?: { message: string }[] } } };
-      setError(e?.data?.error?.details?.[0]?.message || e?.data?.error?.message || 'Registration failed');
+      const e = err as { data?: { message?: string; error?: { code?: string; details?: { message: string }[] } } };
+      const code = e?.data?.error?.code;
+      const detail = e?.data?.error?.details?.[0]?.message;
+      const msg = e?.data?.message || 'Registration failed';
+      if (code === 'EMAIL_EXISTS') setError('This email is already registered. Please sign in instead.');
+      else setError(detail || msg);
     }
   };
 

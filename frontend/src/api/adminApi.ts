@@ -24,6 +24,10 @@ export const adminApi = baseApi.injectEndpoints({
       query: (id: string) => ({ url: `/admin/users/${id}/restore`, method: 'PATCH' }),
       invalidatesTags: ['Admin'],
     }),
+    purgeUser: builder.mutation({
+      query: (id: string) => ({ url: `/admin/users/${id}/purge`, method: 'DELETE' }),
+      invalidatesTags: ['Admin'],
+    }),
     getPendingCompanies: builder.query({
       query: () => '/admin/companies/pending',
       providesTags: ['Admin'],
@@ -50,6 +54,7 @@ export const {
   useUpdateUserStatusMutation,
   useDeleteUserMutation,
   useRestoreUserMutation,
+  usePurgeUserMutation,
   useGetPendingCompaniesQuery,
   useApproveCompanyMutation,
   useGetAuditLogQuery,

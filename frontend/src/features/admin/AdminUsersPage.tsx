@@ -2,8 +2,10 @@ import { useState } from 'react';
 import {
   Typography, CardContent, Box, Button, Tabs, Tab, Chip, alpha,
   Checkbox, Collapse, Toolbar, Tooltip, IconButton,
+  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import RestoreIcon from '@mui/icons-material/Restore';
 import PersonOffOutlinedIcon from '@mui/icons-material/PersonOffOutlined';
 import PauseCircleOutlineIcon from '@mui/icons-material/PauseCircleOutline';
@@ -14,6 +16,7 @@ import {
   useUpdateUserStatusMutation,
   useDeleteUserMutation,
   useRestoreUserMutation,
+  usePurgeUserMutation,
   useBulkUserActionMutation,
 } from '../../api/adminApi';
 import PageHeader from '../../components/ui/PageHeader';
@@ -51,7 +54,9 @@ export default function AdminUsersPage() {
   const [updateStatus] = useUpdateUserStatusMutation();
   const [deleteUser] = useDeleteUserMutation();
   const [restoreUser] = useRestoreUserMutation();
+  const [purgeUser, { isLoading: purging }] = usePurgeUserMutation();
   const [bulkAction, { isLoading: bulking }] = useBulkUserActionMutation();
+  const [purgeTarget, setPurgeTarget] = useState<User | null>(null);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -104,6 +109,13 @@ export default function AdminUsersPage() {
     refetchDeleted();
   };
 
+  const handlePurge = async () => {
+    if (!purgeTarget) return;
+    await purgeUser(purgeTarget.id);
+    setPurgeTarget(null);
+    refetchDeleted();
+  };
+
   const handleExport = async (type: 'users' | 'applications') => {
     const url = type === 'users' ? `${API_BASE}/admin/users/export` : `${API_BASE}/admin/applications/export`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -116,7 +128,7 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <Box>
+    <><Box>
       <PageHeader
         title="User management"
         subtitle="Manage platform accounts and access."
@@ -261,6 +273,12 @@ export default function AdminUsersPage() {
                       sx={{ borderColor: alpha('#22c55e', 0.4), color: '#22c55e', '&:hover': { borderColor: '#22c55e', bgcolor: alpha('#22c55e', 0.07) } }}>
                       Restore
                     </Button>
+                    <Tooltip title="Permanently delete from database">
+                      <Button size="small" variant="outlined" startIcon={<DeleteForeverIcon sx={{ fontSize: 15 }} />} onClick={() => setPurgeTarget(u)}
+                        sx={{ borderColor: alpha('#ef4444', 0.4), color: '#ef4444', '&:hover': { borderColor: '#ef4444', bgcolor: alpha('#ef4444', 0.07) } }}>
+                        Delete forever
+                      </Button>
+                    </Tooltip>
                   </Box>
                 </CardContent>
               </PremiumCard>
@@ -269,5 +287,25 @@ export default function AdminUsersPage() {
         </Box>
       )}
     </Box>
+
+    {/* Permanent delete confirmation dialog */}
+    <Dialog open={!!purgeTarget} onClose={() => setPurgeTarget(null)} maxWidth="xs" fullWidth>
+      <DialogTitle sx={{ fontWeight: 700, color: '#ef4444' }}>
+        Delete permanently?
+      </DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          This will <strong>permanently remove</strong> <strong>{purgeTarget ? name(purgeTarget) : ''}</strong> ({purgeTarget?.email}) from the database. This action <strong>cannot be undone</strong>.
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+        <Button onClick={() => setPurgeTarget(null)} variant="outlined" color="inherit" size="small">Cancel</Button>
+        <Button onClick={handlePurge} variant="contained" color="error" size="small" disabled={purging}
+          startIcon={<DeleteForeverIcon sx={{ fontSize: 16 }} />}>
+          {purging ? 'Deleting...' : 'Delete forever'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 }

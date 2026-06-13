@@ -63,6 +63,19 @@ export const deleteUser = asyncHandler(async (req, res) => {
   res.json({ success: true, data: formatUser(user.toObject()) });
 });
 
+export const purgeUser = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) throw new ApiError(404, 'NOT_FOUND', 'User not found');
+  if (user.status !== 'deleted') throw new ApiError(400, 'NOT_DELETED', 'Only soft-deleted users can be permanently deleted');
+
+  const { Student } = await import('../models/Student.js');
+  await Student.deleteOne({ userId: user._id });
+  await user.deleteOne();
+
+  await logAudit(req, 'user.purge', 'user', req.params.id, { targetEmail: user.email, role: user.role });
+  res.json({ success: true, data: { message: 'User permanently deleted' } });
+});
+
 export const restoreUser = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id);
   if (!user) throw new ApiError(404, 'NOT_FOUND', 'User not found');
