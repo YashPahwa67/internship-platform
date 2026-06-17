@@ -17,6 +17,15 @@ async function getTransporter() {
     });
   }
 
+  // No SMTP configured. In production this must fail loudly — silently
+  // falling back to the fake dev mailer means verification codes never
+  // reach real inboxes (the original bug). Never let that recur.
+  if (config.nodeEnv === 'production') {
+    throw new Error(
+      'SMTP is not configured (SMTP_HOST/SMTP_USER/SMTP_PASS). Refusing to send via the dev mailer in production.'
+    );
+  }
+
   // Dev fallback — Ethereal captures emails, prints preview URL to terminal
   if (!_etherealTransporter) {
     const testAccount = await nodemailer.createTestAccount();

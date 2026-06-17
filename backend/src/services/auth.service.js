@@ -12,6 +12,11 @@ import {
   validateRefreshToken,
 } from './redisToken.service.js';
 import { sendOtpEmail, sendEmailChangeOtp, sendPasswordResetOtp } from './email.service.js';
+import {
+  savePendingRegistration,
+  getPendingRegistration,
+  deletePendingRegistration,
+} from './pendingRegistration.service.js';
 import { config } from '../config/env.js';
 import logger from '../utils/logger.js';
 
@@ -33,106 +38,132 @@ async function sendOtp(email, firstName, otp) {
     logger.error('OTP email failed', { email, reason: err.message });
     if (config.nodeEnv !== 'production') {
       console.log(`\n\x1b[33m[DEV] OTP for ${email}: \x1b[1m${otp}\x1b[0m\n`);
+      return;
     }
+    // In production, never pretend the code was sent — surface it so the
+    // user retries instead of waiting forever for an email that never came.
+    throw new ApiError(502, 'EMAIL_SEND_FAILED', 'We could not send your verification code. Please try again.');
   }
 }
 
 export async function register({ email, password, role, firstName, lastName, companyName }) {
-  const existing = await User.findOne({ email });
-  if (existing) {
-    if (!existing.emailVerified && existing.status === 'pending_verification') {
-      // Unverified — update name and resend a fresh OTP
-      const otp = generateOtp();
-      const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
-      await User.findByIdAndUpdate(existing._id, {
-        $set: { firstName, lastName, emailVerificationToken: otp, emailVerificationExpiry: otpExpiry },
-      });
-      if (existing.role === ROLES.STUDENT) {
-        await Student.findOneAndUpdate(
-          { userId: existing._id },
-          { $set: { fullName: [firstName, lastName].filter(Boolean).join(' ').trim() } },
-          { upsert: true }
-        );
-      }
-      await sendOtp(email, firstName, otp);
-      return { requiresVerification: true, email };
-    }
-    throw new ApiError(409, 'EMAIL_EXISTS', 'Email already registered');
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // A user only exists in the DB once verified, so any hit here is a real account.
+  const existing = await User.findOne({ email: normalizedEmail });
+  if (existing) throw new ApiError(409, 'EMAIL_EXISTS', 'Email already registered');
+
+  if (role === ROLES.COMPANY_HR && !companyName) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'Company name is required');
   }
 
   const passwordHash = await User.hashPassword(password);
-  let companyId = null;
+  const otp = generateOtp();
 
-  if (role === ROLES.COMPANY_HR) {
-    if (!companyName) throw new ApiError(400, 'VALIDATION_ERROR', 'Company name is required');
-    const slug = slugify(companyName) + '-' + Date.now().toString(36);
-    const company = await Company.create({ name: companyName, slug, approvalStatus: 'pending' });
+  // Hold everything in the temporary store — nothing is persisted to MongoDB
+  // until the OTP is verified.
+  await savePendingRegistration(normalizedEmail, {
+    email: normalizedEmail,
+    passwordHash,
+    role,
+    firstName,
+    lastName,
+    companyName: companyName || null,
+    otp,
+    expiresAt: Date.now() + 10 * 60 * 1000,
+  });
+
+  try {
+    await sendOtp(normalizedEmail, firstName, otp);
+  } catch (err) {
+    // Don't leave an orphan pending entry if we couldn't deliver the code.
+    await deletePendingRegistration(normalizedEmail);
+    throw err;
+  }
+
+  return { requiresVerification: true, email: normalizedEmail };
+}
+
+export async function verifyOtp(email, otp) {
+  const normalizedEmail = email.toLowerCase().trim();
+
+  const pending = await getPendingRegistration(normalizedEmail);
+  if (!pending) {
+    // Either never registered, already verified, or the pending entry expired.
+    const alreadyUser = await User.findOne({ email: normalizedEmail });
+    if (alreadyUser?.emailVerified) {
+      throw new ApiError(400, 'ALREADY_VERIFIED', 'Email is already verified');
+    }
+    throw new ApiError(400, 'OTP_EXPIRED', 'Code has expired. Please request a new one.');
+  }
+
+  if (pending.otp !== otp) throw new ApiError(400, 'INVALID_OTP', 'Invalid verification code');
+  if (pending.expiresAt < Date.now()) {
+    await deletePendingRegistration(normalizedEmail);
+    throw new ApiError(400, 'OTP_EXPIRED', 'Code has expired. Please request a new one.');
+  }
+
+  // Guard against a race where the email got registered after the pending entry.
+  const taken = await User.findOne({ email: normalizedEmail });
+  if (taken) {
+    await deletePendingRegistration(normalizedEmail);
+    throw new ApiError(409, 'EMAIL_EXISTS', 'Email already registered');
+  }
+
+  // Verified — now create the real records.
+  let companyId = null;
+  if (pending.role === ROLES.COMPANY_HR) {
+    const slug = slugify(pending.companyName) + '-' + Date.now().toString(36);
+    const company = await Company.create({ name: pending.companyName, slug, approvalStatus: 'pending' });
     companyId = company._id;
   }
 
-  const otp = generateOtp();
-  const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
-
   const user = await User.create({
-    email, passwordHash, role, firstName, lastName, companyId,
-    status: 'pending_verification',
-    emailVerified: false,
-    emailVerificationToken: otp,
-    emailVerificationExpiry: otpExpiry,
+    email: pending.email,
+    passwordHash: pending.passwordHash,
+    role: pending.role,
+    firstName: pending.firstName,
+    lastName: pending.lastName,
+    companyId,
+    status: 'active',
+    emailVerified: true,
     refreshTokenFamily: uuidv4(),
   });
 
-  if (role === ROLES.STUDENT) {
+  if (pending.role === ROLES.STUDENT) {
     await Student.create({
       userId: user._id,
-      fullName: [firstName, lastName].filter(Boolean).join(' ').trim(),
+      fullName: [pending.firstName, pending.lastName].filter(Boolean).join(' ').trim(),
       skills: [],
     });
   }
 
-  await sendOtp(email, firstName, otp);
-  return { requiresVerification: true, email };
-}
+  await deletePendingRegistration(normalizedEmail);
 
-export async function verifyOtp(email, otp) {
-  const user = await User.findOne({ email })
-    .select('+emailVerificationToken +emailVerificationExpiry');
-
-  if (!user) throw new ApiError(404, 'NOT_FOUND', 'No account found with that email');
-  if (user.emailVerified) throw new ApiError(400, 'ALREADY_VERIFIED', 'Email is already verified');
-  if (!user.emailVerificationToken || user.emailVerificationToken !== otp) {
-    throw new ApiError(400, 'INVALID_OTP', 'Invalid verification code');
-  }
-  if (user.emailVerificationExpiry < new Date()) {
-    throw new ApiError(400, 'OTP_EXPIRED', 'Code has expired. Please request a new one.');
-  }
-
-  await User.findByIdAndUpdate(user._id, {
-    $set: { emailVerified: true, status: 'active' },
-    $unset: { emailVerificationToken: 1, emailVerificationExpiry: 1 },
-  });
-
-  if (user.role === ROLES.STUDENT) {
-    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
-    await Student.findOneAndUpdate({ userId: user._id }, { $set: { fullName } }, { upsert: true });
-  }
-
-  const updatedUser = await User.findById(user._id).populate('companyId', 'name approvalStatus');
-  const tokens = await issueTokens(updatedUser);
-  return { user: sanitizeUser(updatedUser), ...tokens };
+  const created = await User.findById(user._id).populate('companyId', 'name approvalStatus');
+  const tokens = await issueTokens(created);
+  return { user: sanitizeUser(created), ...tokens };
 }
 
 export async function resendOtp(email) {
-  const user = await User.findOne({ email });
-  if (!user) throw new ApiError(404, 'NOT_FOUND', 'No account found with that email');
-  if (user.emailVerified) throw new ApiError(400, 'ALREADY_VERIFIED', 'Email is already verified');
+  const normalizedEmail = email.toLowerCase().trim();
+
+  const pending = await getPendingRegistration(normalizedEmail);
+  if (!pending) {
+    const alreadyUser = await User.findOne({ email: normalizedEmail });
+    if (alreadyUser?.emailVerified) {
+      throw new ApiError(400, 'ALREADY_VERIFIED', 'Email is already verified');
+    }
+    throw new ApiError(404, 'NOT_FOUND', 'No pending registration found. Please sign up again.');
+  }
 
   const otp = generateOtp();
-  const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
-  await User.findByIdAndUpdate(user._id, {
-    $set: { emailVerificationToken: otp, emailVerificationExpiry: otpExpiry },
+  await savePendingRegistration(normalizedEmail, {
+    ...pending,
+    otp,
+    expiresAt: Date.now() + 10 * 60 * 1000,
   });
-  await sendOtp(email, user.firstName, otp);
+  await sendOtp(normalizedEmail, pending.firstName, otp);
   return { message: 'New code sent' };
 }
 
