@@ -76,6 +76,12 @@ export const config = {
     pass: env.SMTP_PASS,
     from: env.EMAIL_FROM,
   },
+  resend: {
+    // HTTP email API — required on hosts like Render that block outbound SMTP.
+    apiKey: env.RESEND_API_KEY,
+    // Until a domain is verified in Resend, use their shared sender.
+    from: env.RESEND_FROM || env.EMAIL_FROM || 'Internship Platform <onboarding@resend.dev>',
+  },
   isCloudinaryConfigured: Boolean(
     env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET
   ),

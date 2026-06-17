@@ -88,7 +88,32 @@ export async function sendEmailChangeOtp({ to, firstName, otp }) {
   return sendEmail({ to, subject, html, text });
 }
 
+async function sendViaResend({ to, subject, html, text }) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.resend.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: config.resend.from, to, subject, html, text }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Resend API ${res.status}: ${detail}`);
+  }
+
+  const data = await res.json();
+  logger.info('Email sent via Resend', { to, id: data.id });
+  return data;
+}
+
 export async function sendEmail({ to, subject, html, text }) {
+  // Prefer Resend's HTTP API — works on hosts that block outbound SMTP (Render).
+  if (config.resend.apiKey) {
+    return sendViaResend({ to, subject, html, text });
+  }
+
   const transporter = await getTransporter();
   const from = config.smtp.from || config.smtp.user || '"Internship Platform" <no-reply@imp.dev>';
 
