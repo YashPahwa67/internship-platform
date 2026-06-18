@@ -88,6 +88,41 @@ export async function sendEmailChangeOtp({ to, firstName, otp }) {
   return sendEmail({ to, subject, html, text });
 }
 
+// Parse "Display Name <email@x.com>" or a bare "email@x.com" into SendGrid's
+// { email, name } sender object.
+function parseSender(value) {
+  const match = /^\s*(.*?)\s*<\s*([^>]+)\s*>\s*$/.exec(value || '');
+  if (match) return { email: match[2], name: match[1] || undefined };
+  return { email: (value || '').trim() };
+}
+
+async function sendViaSendgrid({ to, subject, html, text }) {
+  const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.sendgrid.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: to }] }],
+      from: parseSender(config.sendgrid.from),
+      subject,
+      content: [
+        { type: 'text/plain', value: text },
+        { type: 'text/html', value: html },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`SendGrid API ${res.status}: ${detail}`);
+  }
+
+  logger.info('Email sent via SendGrid', { to, messageId: res.headers.get('x-message-id') });
+  return { id: res.headers.get('x-message-id') };
+}
+
 async function sendViaResend({ to, subject, html, text }) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -109,7 +144,10 @@ async function sendViaResend({ to, subject, html, text }) {
 }
 
 export async function sendEmail({ to, subject, html, text }) {
-  // Prefer Resend's HTTP API — works on hosts that block outbound SMTP (Render).
+  // Prefer an HTTP email API — works on hosts that block outbound SMTP (Render).
+  if (config.sendgrid.apiKey) {
+    return sendViaSendgrid({ to, subject, html, text });
+  }
   if (config.resend.apiKey) {
     return sendViaResend({ to, subject, html, text });
   }

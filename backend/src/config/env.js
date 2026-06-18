@@ -82,6 +82,12 @@ export const config = {
     // Until a domain is verified in Resend, use their shared sender.
     from: env.RESEND_FROM || env.EMAIL_FROM || 'Internship Platform <onboarding@resend.dev>',
   },
+  sendgrid: {
+    // HTTP email API. Works on Render and, with Single Sender Verification,
+    // can send to any recipient after verifying just one sender address.
+    apiKey: env.SENDGRID_API_KEY,
+    from: env.SENDGRID_FROM || env.EMAIL_FROM,
+  },
   isCloudinaryConfigured: Boolean(
     env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET
   ),
