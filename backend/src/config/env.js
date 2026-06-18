@@ -88,6 +88,12 @@ export const config = {
     apiKey: env.SENDGRID_API_KEY,
     from: env.SENDGRID_FROM || env.EMAIL_FROM,
   },
+  brevo: {
+    // HTTP email API. Works on Render; 300 emails/day free and a single
+    // verified sender can email any recipient (no domain required).
+    apiKey: env.BREVO_API_KEY,
+    from: env.BREVO_FROM || env.EMAIL_FROM,
+  },
   isCloudinaryConfigured: Boolean(
     env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET
   ),

@@ -96,6 +96,33 @@ function parseSender(value) {
   return { email: (value || '').trim() };
 }
 
+async function sendViaBrevo({ to, subject, html, text }) {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': config.brevo.apiKey,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      sender: parseSender(config.brevo.from),
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text,
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Brevo API ${res.status}: ${detail}`);
+  }
+
+  const data = await res.json().catch(() => ({}));
+  logger.info('Email sent via Brevo', { to, messageId: data.messageId });
+  return data;
+}
+
 async function sendViaSendgrid({ to, subject, html, text }) {
   const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
@@ -145,6 +172,9 @@ async function sendViaResend({ to, subject, html, text }) {
 
 export async function sendEmail({ to, subject, html, text }) {
   // Prefer an HTTP email API — works on hosts that block outbound SMTP (Render).
+  if (config.brevo.apiKey) {
+    return sendViaBrevo({ to, subject, html, text });
+  }
   if (config.sendgrid.apiKey) {
     return sendViaSendgrid({ to, subject, html, text });
   }
